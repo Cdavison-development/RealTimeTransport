@@ -1,4 +1,4 @@
-package com.project.busfinder;
+package com.project.busfinder.util;
 
 import java.io.BufferedWriter;
 import java.io.FileWriter;
