@@ -125,9 +125,11 @@ public class addRoutesTest {
         });
     }
 
+
     @Test
     public void testGetUniqueIdentifier() {
         String identifier = addRoutes.GetUniqueIdentifier("path/to/AMSY_6_test.json");
         assertEquals("6", identifier);
     }
+
 }

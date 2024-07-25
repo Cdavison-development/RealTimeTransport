@@ -99,7 +99,7 @@ public class addRoutes {
             stmt.execute(createTableSQL);
         }
     }
-
+    //
     static void removeIncompleteData(Connection conn) throws SQLException {
         String sql = "DELETE FROM routes WHERE polyline_data IS NULL OR stop_point_refs IS NULL";
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
