@@ -1,6 +1,7 @@
 package com.project.busfinder.dataInsertion;
 
 import static com.project.busfinder.dataInsertion.addRoutes.handlePolylines;
+import static com.project.busfinder.helperFunctions.getUniqueIdentifer.GetUniqueIdentifier;
 import static org.mockito.Mockito.*;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -135,7 +136,7 @@ public class addRoutesTest {
 
     @Test
     public void testGetUniqueIdentifier() {
-        String identifier = addRoutes.GetUniqueIdentifier("path/to/AMSY_6_test.json");
+        String identifier = GetUniqueIdentifier("path/to/AMSY_6_test.json");
         assertEquals("6", identifier);
     }
 

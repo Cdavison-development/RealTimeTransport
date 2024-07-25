@@ -8,6 +8,8 @@ import java.nio.file.Paths;
 
 import java.sql.*;
 
+import static com.project.busfinder.helperFunctions.getUniqueIdentifer.GetUniqueIdentifier;
+
 
 public class addRoutes {
     public static final String DB_URL = "jdbc:sqlite:data/databases/routes.db";
@@ -107,20 +109,6 @@ public class addRoutes {
             System.out.println("Removed " + affectedRows + " incomplete records from the database.");
         }
     }
-    static String GetUniqueIdentifier(String filepath) {
-        Path path = Paths.get(filepath);
-        String fileName = path.getFileName().toString();
 
-        System.out.println("Processing file: " + fileName);
-
-        String[] underscoreSplit = fileName.split("_");
-        if (underscoreSplit.length > 2) {
-            System.out.println("Extracted Route ID: " + underscoreSplit[1]);
-            return underscoreSplit[1];
-        } else {
-            System.out.println("Filename does not contain enough parts: " + fileName);
-            return "";
-        }
-    }
 }
 
