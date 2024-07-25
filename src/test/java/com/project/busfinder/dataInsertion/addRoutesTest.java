@@ -55,6 +55,13 @@ public class addRoutesTest {
 
     }
 
+    /**
+     *
+     * This function does work, but the test case will return failed as Insert Or Replace syntax is not
+     * supported by H2, using a different sql statement defeats the purpose of testing this case
+     *
+     * @throws Exception
+     */
     @Test
     public void testHandlePolylines() throws Exception {
         String testDirectoryPath = "data/encoded_polylines_testset";
@@ -83,7 +90,7 @@ public class addRoutesTest {
 
 
         verify(mockConnection).prepareStatement(
-                "MERGE INTO routes (route_id, polyline_data) KEY (route_id) VALUES (?, ?)"
+                "INSERT OR REPLACE INTO routes (route_id, polyline_data) VALUES (?, ?)"
         );
         verify(mockPreparedStatement).setString(1, "6");
         verify(mockPreparedStatement).setString(2, new JSONArray(Files.readString(polylineTestFile.toPath())).toString());
@@ -107,7 +114,7 @@ public class addRoutesTest {
 
         // Verify the SQL interaction.
         verify(mockConnection).prepareStatement(
-                "MERGE INTO routes (route_id, stop_point_refs) KEY (route_id) VALUES (?, ?)"
+                "INSERT OR REPLACE INTO routes (route_id, stop_point_refs) VALUES (?, ?)"
 
         );
         verify(mockPreparedStatement).setString(1, "6");

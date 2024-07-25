@@ -66,8 +66,8 @@ public class addRoutes {
         String uniqueIdentifier = GetUniqueIdentifier(file.getName());
         String jsonContent = new String(java.nio.file.Files.readAllBytes(file.toPath()), java.nio.charset.StandardCharsets.UTF_8);
         JSONArray jsonArray = new JSONArray(jsonContent);
-        //for testing means, h2 database does not support on conflict
-        String sql = "MERGE INTO routes (route_id, polyline_data) KEY (route_id) VALUES (?, ?)";
+
+        String sql = "INSERT OR REPLACE INTO routes (route_id, polyline_data) VALUES (?, ?)";
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, uniqueIdentifier);
             pstmt.setString(2, jsonArray.toString());
@@ -80,8 +80,8 @@ public class addRoutes {
         String uniqueIdentifier = GetUniqueIdentifier(file.getName());
         String jsonContent = new String(java.nio.file.Files.readAllBytes(file.toPath()), java.nio.charset.StandardCharsets.UTF_8);
         JSONArray jsonArray = new JSONArray(jsonContent);
-
-        String sql = "MERGE INTO routes (route_id, stop_point_refs) KEY (route_id) VALUES (?, ?)";
+        String sql = "INSERT OR REPLACE INTO routes (route_id, stop_point_refs) VALUES (?, ?)";
+        //String sql = "MERGE INTO routes (route_id, stop_point_refs) KEY (route_id) VALUES (?, ?)";
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, uniqueIdentifier);
             pstmt.setString(2, jsonArray.toString());
