@@ -20,4 +20,7 @@ module com.project.busfinder {
     opens com.project.busfinder.util to javafx.fxml;
     exports com.project.busfinder.helperFunctions;
     opens com.project.busfinder.helperFunctions to javafx.fxml;
+    exports com.project.busfinder.GUI;
+    opens com.project.busfinder.GUI to javafx.fxml;
+
 }
