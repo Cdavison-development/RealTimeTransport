@@ -38,8 +38,7 @@ public class addStops {
     public static void insertDataIntoDatabase(String jsonData, Connection conn) throws Exception {
         JSONObject obj = new JSONObject(jsonData);
         createStopsTable(conn);
-        String sql = "INSERT OR REPLACE INTO bus_stops (stop_id, common_name, longitude, latitude) " +
-                "VALUES (?, ?, ?, ?)";
+        String sql = "INSERT OR IGNORE INTO bus_stops (stop_id, common_name, longitude, latitude) VALUES (?, ?, ?, ?)";
         conn.setAutoCommit(false);
 
         try {

@@ -32,7 +32,7 @@ public class addTimes {
     public static final String DB_URL = "jdbc:sqlite:data/databases/routes.db";
 
     public static void main(String[] args) {
-        String folderPath = "data/routes";
+        String folderPath = "data/routetest";
         try {
             createJourneyTable(DB_URL);
             processAllFilesInFolder(folderPath);
@@ -75,15 +75,18 @@ public class addTimes {
                 System.out.println("Found Journey Codes: " + JourneyCodeList);
                 // Initialise empty journey Refs, outside for loops so can be re-initialised for each file.
                 String journeyRefs = "";
+                String departureTime = "";
                 for (String JourneyCode : JourneyCodeList) {
                     System.out.println("Processing Journey Code: " + JourneyCode);
+                    departureTime = getDepartureTime(filePath, JourneyCode);
+                    System.out.println(departureTime);
                     // Use Journey codes to find the Journey Ref, which is a unique identifier for certain journey on a bus route.
-                    journeyRefs = findVehicleJourneyRef(filePath, JourneyCode);
+                    journeyRefs = findAllVehicleJourneyRefs(filePath, JourneyCode);
                     System.out.println("Found journey refs : " + journeyRefs);
                 }
                 if (journeyRefs != null) {
                     // Will be used for predicting where we expect a bus to be.
-                    String departureTime = getDepartureTime(filePath, journeyRefs);
+                    //String departureTime = getDepartureTime(filePath, journeyRefs);
                     if (departureTime != null) {
                         // Write all the data to sqlite.
                         List<Map<String, String>> journeyPatternSections = parseJourneyPatternSections(filePath, departureTime);

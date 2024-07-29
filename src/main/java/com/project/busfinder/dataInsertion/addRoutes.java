@@ -17,7 +17,7 @@ public class addRoutes {
     public static void main(String[] args) {
 
 
-
+        //handleStopRefs("data/stoprefs", DB_URL);
         handlePolylines("data/encoded_polylines", DB_URL);
         handleStopRefs("data/stoprefs", DB_URL);
 
@@ -69,7 +69,9 @@ public class addRoutes {
         String jsonContent = new String(java.nio.file.Files.readAllBytes(file.toPath()), java.nio.charset.StandardCharsets.UTF_8);
         JSONArray jsonArray = new JSONArray(jsonContent);
 
-        String sql = "INSERT OR REPLACE INTO routes (route_id, polyline_data) VALUES (?, ?)";
+        String sql = "INSERT INTO routes (route_id, polyline_data) VALUES (?, ?) "
+                + "ON CONFLICT(route_id) DO UPDATE SET "
+                + "polyline_data = EXCLUDED.polyline_data";
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, uniqueIdentifier);
             pstmt.setString(2, jsonArray.toString());
@@ -82,7 +84,9 @@ public class addRoutes {
         String uniqueIdentifier = GetUniqueIdentifier(file.getName());
         String jsonContent = new String(java.nio.file.Files.readAllBytes(file.toPath()), java.nio.charset.StandardCharsets.UTF_8);
         JSONArray jsonArray = new JSONArray(jsonContent);
-        String sql = "INSERT OR REPLACE INTO routes (route_id, stop_point_refs) VALUES (?, ?)";
+        String sql = "INSERT INTO routes (route_id, stop_point_refs) VALUES (?, ?) "
+                + "ON CONFLICT(route_id) DO UPDATE SET "
+                + "stop_point_refs = EXCLUDED.stop_point_refs";
         //String sql = "MERGE INTO routes (route_id, stop_point_refs) KEY (route_id) VALUES (?, ?)";
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, uniqueIdentifier);

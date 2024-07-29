@@ -14,8 +14,29 @@ import java.util.Map;
 import java.time.LocalTime;
 import java.time.Duration;
 
+
+/**
+ *
+ * we did not realise that different Journeycodes/services may use the same route pattern. for each journey code
+ *
+ *
+ * create function to find all vehicle codes
+ *
+ * use vehicle Journey code to identify Journey Pattern ref and Journey code
+ *
+ * for this, we may not need to
+ *
+ */
 public class XMLtoTimetableFunctions{
 
+
+    public static void main(String[] args) throws Exception {
+        String filePath = "data/routes/AMSY_G10S_AMSYPC000114157610B_20240123_-_1808719.xml";
+        //String JourneyCode = findAllJourneyCodes(filePath);
+        //String journeyRefs = findAllVehicleJourneyRefs(filePath, "1003");
+        String departureTime = getDepartureTime(filePath, "1003");
+        System.out.println(departureTime);
+    }
     /**
      *
      *
@@ -72,7 +93,166 @@ public class XMLtoTimetableFunctions{
      * @return
      * @throws Exception
      */
-    public static String findVehicleJourneyRef(String filePath, String targetJourneyCode) throws Exception {
+    public static String findAllVehicleJourneyRefs(String filePath, String targetJourneyCode) throws Exception {
+        XMLInputFactory factory = XMLInputFactory.newInstance();
+        XMLEventReader eventReader = factory.createXMLEventReader(new FileReader(filePath));
+
+        boolean inTicketMachine = false;
+        String currentJourneyCode = null;
+        String JourneyPatternRef = null;
+
+        while (eventReader.hasNext()) {
+            XMLEvent event = eventReader.nextEvent();
+
+            if (event.isStartElement()) {
+                StartElement startElement = event.asStartElement();
+                String elementName = startElement.getName().getLocalPart();
+
+                switch (elementName) {
+                    case "TicketMachine":
+                        inTicketMachine = true;
+                        break;
+                    case "JourneyCode":
+                        if (inTicketMachine) {
+                            event = eventReader.nextEvent();
+                            if (event.isCharacters()) {
+                                currentJourneyCode = event.asCharacters().getData();
+                            }
+                        }
+                        break;
+                    case "VehicleJourneyCode":
+                        event = eventReader.nextEvent();
+                        if (event.isCharacters()) {
+                            JourneyPatternRef = event.asCharacters().getData();
+                        }
+                        break;
+                }
+            } else if (event.isEndElement()) {
+                EndElement endElement = event.asEndElement();
+                String elementName = endElement.getName().getLocalPart();
+
+                if (elementName.equals("TicketMachine")) {
+                    inTicketMachine = false;
+                } else if (elementName.equals("VehicleJourney") && currentJourneyCode != null && currentJourneyCode.equals(targetJourneyCode)) {
+                    System.out.println(JourneyPatternRef);
+                    return JourneyPatternRef;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     *
+     * get vehicleJourney Code and journey code. Use that to identify
+     *
+     *
+     * @param filePath
+     * @param targetJourneyCode
+     * @return
+     * @throws Exception
+     */
+    public static String findAllVehicleJourneyCodes(String filePath, String targetJourneyCode) throws Exception {
+        XMLInputFactory factory = XMLInputFactory.newInstance();
+        XMLEventReader eventReader = factory.createXMLEventReader(new FileReader(filePath));
+
+        boolean inTicketMachine = false;
+        String currentJourneyCode = null;
+        String VehicleJourneyCode = null;
+
+        while (eventReader.hasNext()) {
+            XMLEvent event = eventReader.nextEvent();
+
+            if (event.isStartElement()) {
+                StartElement startElement = event.asStartElement();
+                String elementName = startElement.getName().getLocalPart();
+
+                switch (elementName) {
+                    case "TicketMachine":
+                        inTicketMachine = true;
+                        break;
+                    case "JourneyCode":
+                        if (inTicketMachine) {
+                            event = eventReader.nextEvent();
+                            if (event.isCharacters()) {
+                                currentJourneyCode = event.asCharacters().getData();
+                            }
+                        }
+                        break;
+                    case "VehicleJourneyCode":
+                        event = eventReader.nextEvent();
+                        if (event.isCharacters()) {
+                            VehicleJourneyCode = event.asCharacters().getData();
+                        }
+                        break;
+                }
+            } else if (event.isEndElement()) {
+                EndElement endElement = event.asEndElement();
+                String elementName = endElement.getName().getLocalPart();
+
+                if (elementName.equals("TicketMachine")) {
+                    inTicketMachine = false;
+                } else if (elementName.equals("VehicleJourney") && currentJourneyCode != null && currentJourneyCode.equals(targetJourneyCode)) {
+                    System.out.println(VehicleJourneyCode);
+                    return VehicleJourneyCode;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    public static String findJourneyCodes(String filePath, String targetJourneyCode) throws Exception {
+        XMLInputFactory factory = XMLInputFactory.newInstance();
+        XMLEventReader eventReader = factory.createXMLEventReader(new FileReader(filePath));
+
+        boolean inTicketMachine = false;
+        String currentJourneyCode = null;
+        String JourneyPatternRef = null;
+
+        while (eventReader.hasNext()) {
+            XMLEvent event = eventReader.nextEvent();
+
+            if (event.isStartElement()) {
+                StartElement startElement = event.asStartElement();
+                String elementName = startElement.getName().getLocalPart();
+
+                switch (elementName) {
+                    case "TicketMachine":
+                        inTicketMachine = true;
+                        break;
+                    case "JourneyCode":
+                        if (inTicketMachine) {
+                            event = eventReader.nextEvent();
+                            if (event.isCharacters()) {
+                                currentJourneyCode = event.asCharacters().getData();
+                            }
+                        }
+                        break;
+                    case "JourneyPatternRef":
+                        event = eventReader.nextEvent();
+                        if (event.isCharacters()) {
+                            JourneyPatternRef = event.asCharacters().getData();
+                        }
+                        break;
+                }
+            } else if (event.isEndElement()) {
+                EndElement endElement = event.asEndElement();
+                String elementName = endElement.getName().getLocalPart();
+
+                if (elementName.equals("TicketMachine")) {
+                    inTicketMachine = false;
+                } else if (elementName.equals("VehicleJourney") && currentJourneyCode != null && currentJourneyCode.equals(targetJourneyCode)) {
+                    System.out.println(currentJourneyCode);
+                    return currentJourneyCode;
+                }
+            }
+        }
+        return null;
+    }
+/**
+    public static String findSingleVehicleJourneyRefs(String targetJourneyCode) throws Exception {
         XMLInputFactory factory = XMLInputFactory.newInstance();
         XMLEventReader eventReader = factory.createXMLEventReader(new FileReader(filePath));
 
@@ -121,7 +301,7 @@ public class XMLtoTimetableFunctions{
 
         return null;
     }
-
+ **/
     /**
      *
      *
@@ -207,15 +387,17 @@ public class XMLtoTimetableFunctions{
     /**
      *
      *
-     *
+     *  notes for change: departure time needs to be based off journey code not journey pattern. this is because two busses starting
+     *  at different times can have the same journey pattern. Currently, the code will find the first instance of the specifed journeypattern,
+     *  and return the corresponding departure time, meaning any repeating journey patterns will have the same start time.
      *
      * @param filePath
-     * @param journeyPatternRef
+     * @param
      * @return
      * @throws Exception
      */
 
-    public static String getDepartureTime(String filePath, String journeyPatternRef) throws Exception {
+    public static String getDepartureTime(String filePath, String journeyCodevalue) throws Exception {
         XMLInputFactory factory = XMLInputFactory.newInstance();
         XMLEventReader eventReader = factory.createXMLEventReader(new FileReader(filePath));
         boolean isVehicleJourney = false;  // To track when we're inside the relevant vehicle journey
@@ -228,10 +410,10 @@ public class XMLtoTimetableFunctions{
                 StartElement startElement = event.asStartElement();
                 String elementName = startElement.getName().getLocalPart();
 
-                if ("JourneyPatternRef".equals(elementName)) {
+                if ("JourneyCode".equals(elementName)) {
                     Characters characters = (Characters) eventReader.nextEvent();
                     String currentRef = characters.getData();
-                    if (journeyPatternRef.equals(currentRef)) {
+                    if (journeyCodevalue.equals(currentRef)) {
                         isVehicleJourney = true;  // We're inside the relevant vehicle journey
                     }
                 } else if (isVehicleJourney && "DepartureTime".equals(elementName)) {
