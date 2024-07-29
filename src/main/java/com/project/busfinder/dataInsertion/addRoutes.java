@@ -8,6 +8,8 @@ import java.nio.file.Paths;
 
 import java.sql.*;
 
+import static com.project.busfinder.helperFunctions.getUniqueIdentifer.GetUniqueIdentifier;
+
 
 public class addRoutes {
     public static final String DB_URL = "jdbc:sqlite:data/databases/routes.db";
@@ -66,8 +68,8 @@ public class addRoutes {
         String uniqueIdentifier = GetUniqueIdentifier(file.getName());
         String jsonContent = new String(java.nio.file.Files.readAllBytes(file.toPath()), java.nio.charset.StandardCharsets.UTF_8);
         JSONArray jsonArray = new JSONArray(jsonContent);
-        //for testing means, h2 database does not support on conflict
-        String sql = "MERGE INTO routes (route_id, polyline_data) KEY (route_id) VALUES (?, ?)";
+
+        String sql = "INSERT OR REPLACE INTO routes (route_id, polyline_data) VALUES (?, ?)";
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, uniqueIdentifier);
             pstmt.setString(2, jsonArray.toString());
@@ -80,8 +82,8 @@ public class addRoutes {
         String uniqueIdentifier = GetUniqueIdentifier(file.getName());
         String jsonContent = new String(java.nio.file.Files.readAllBytes(file.toPath()), java.nio.charset.StandardCharsets.UTF_8);
         JSONArray jsonArray = new JSONArray(jsonContent);
-
-        String sql = "MERGE INTO routes (route_id, stop_point_refs) KEY (route_id) VALUES (?, ?)";
+        String sql = "INSERT OR REPLACE INTO routes (route_id, stop_point_refs) VALUES (?, ?)";
+        //String sql = "MERGE INTO routes (route_id, stop_point_refs) KEY (route_id) VALUES (?, ?)";
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, uniqueIdentifier);
             pstmt.setString(2, jsonArray.toString());
@@ -107,20 +109,6 @@ public class addRoutes {
             System.out.println("Removed " + affectedRows + " incomplete records from the database.");
         }
     }
-    static String GetUniqueIdentifier(String filepath) {
-        Path path = Paths.get(filepath);
-        String fileName = path.getFileName().toString();
 
-        System.out.println("Processing file: " + fileName);
-
-        String[] underscoreSplit = fileName.split("_");
-        if (underscoreSplit.length > 2) {
-            System.out.println("Extracted Route ID: " + underscoreSplit[1]);
-            return underscoreSplit[1];
-        } else {
-            System.out.println("Filename does not contain enough parts: " + fileName);
-            return "";
-        }
-    }
 }
 
