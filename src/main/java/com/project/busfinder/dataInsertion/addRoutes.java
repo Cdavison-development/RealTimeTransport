@@ -63,7 +63,7 @@ public class addRoutes {
     }
 
     static void processPolylines(File file, Connection conn) throws Exception {
-        // Process the polyline data as JSON and update the database
+
         System.out.println("Processing polylines...");
         String uniqueIdentifier = GetUniqueIdentifier(file.getName());
         String jsonContent = new String(java.nio.file.Files.readAllBytes(file.toPath()), java.nio.charset.StandardCharsets.UTF_8);
@@ -80,7 +80,7 @@ public class addRoutes {
     }
 
     static void processStopRefs(File file, Connection conn) throws Exception {
-        // process the stop references as JSON and update the database
+
         String uniqueIdentifier = GetUniqueIdentifier(file.getName());
         String jsonContent = new String(java.nio.file.Files.readAllBytes(file.toPath()), java.nio.charset.StandardCharsets.UTF_8);
         JSONArray jsonArray = new JSONArray(jsonContent);

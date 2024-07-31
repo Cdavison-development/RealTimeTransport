@@ -4,39 +4,27 @@ import javafx.animation.TranslateTransition;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
-import javafx.scene.control.Button;
-import javafx.scene.control.TextField;
-import javafx.scene.image.ImageView;
+import javafx.scene.layout.AnchorPane;
 import javafx.scene.layout.VBox;
-import javafx.scene.layout.*;
 import javafx.util.Duration;
-
+import javafx.scene.layout.*;
 import java.io.IOException;
+
 
 public class MainController {
     @FXML
     private VBox sidePanel;
     @FXML
-    private GridPane sidePanelGridPane;
+    private AnchorPane anchorPane;
     @FXML
     private VBox buttonPanel;
+
     @FXML
     private GridPane buttonPanelGridPane;
 
-    @FXML
-    private Button toggleButton;
-
-    @FXML
-    private ImageView buttonImage;
-
-    @FXML
-    private AnchorPane anchorPane;
-
-    @FXML
-    private TextField CompanyTextField;
-
     private boolean isPanelOpen = false;
-    private boolean isFirstClick = true;
+
+
 
     @FXML
     private void initialize() {
@@ -45,21 +33,29 @@ public class MainController {
         sidePanel.setVisible(false);
         buttonPanel.setTranslateX(sidePanel.getTranslateX() + 20);
 
-        loadGridPane();
-
+        loadSidePanel("/com/project/busfinder/GUI/startingSidePanel.fxml");
         sidePanel.prefHeightProperty().bind(anchorPane.heightProperty().multiply(0.8));
         buttonPanel.prefHeightProperty().bind(anchorPane.heightProperty().multiply(0.8));
         buttonPanelGridPane.prefHeightProperty().bind(anchorPane.heightProperty().multiply(0.8));
     }
 
-    public void loadGridPane() {
+    public void loadSidePanel(String fxmlFile) {
         try {
-            FXMLLoader loader = new FXMLLoader(getClass().getResource("/com/project/busfinder/GUI/trackBusPanel.fxml"));
-            sidePanelGridPane = loader.load();
+            FXMLLoader loader = new FXMLLoader(getClass().getResource(fxmlFile));
+            VBox newSidePanel = loader.load();
+
+            if ("/com/project/busfinder/GUI/startingSidePanel.fxml".equals(fxmlFile)) {
+                SidePanelController sidePanelController = loader.getController();
+                sidePanelController.setMainController(this);
+            } else if ("/com/project/busfinder/GUI/trackBusPanel.fxml".equals(fxmlFile)) {
+                TrackBusPanelController trackBusPanelController = loader.getController();
+                trackBusPanelController.setMainController(this);
+            }
+
             sidePanel.getChildren().clear();
-            sidePanel.getChildren().add(sidePanelGridPane);
-            sidePanelGridPane.prefHeightProperty().bind(anchorPane.heightProperty().multiply(0.8));
+            sidePanel.getChildren().add(newSidePanel);
         } catch (IOException e) {
+            System.err.println("Failed to load " + fxmlFile);
             e.printStackTrace();
         }
     }
@@ -76,13 +72,10 @@ public class MainController {
         if (isPanelOpen) {
 
             transition.setToX(startX);
-
             buttonTransition.setToX(startX + 20);
         } else {
-
             sidePanel.setVisible(true);
             transition.setToX(endX);
-
             buttonTransition.setToX(endX + gap);
         }
 
@@ -91,4 +84,13 @@ public class MainController {
         isPanelOpen = !isPanelOpen;
     }
 
+    @FXML
+    private void loadStartingSidePanel(ActionEvent event) {
+        loadSidePanel("/com/project/busfinder/GUI/startingSidePanel.fxml");
+    }
+
+    @FXML
+    private void loadTrackBusPanel(ActionEvent event) {
+        loadSidePanel("/com/project/busfinder/GUI/trackBusPanel.fxml");
+    }
 }

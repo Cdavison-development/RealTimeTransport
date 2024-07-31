@@ -82,18 +82,18 @@ public class readLiveLocation {
 
                 // some journeyRefs are returning as a 5000 instead of 1000, ex: 62=5044. This is erroneus and should be 1044
                 // Adjust journeyRef if it does not start with '1'
-                if (!journeyRef.startsWith("1")) {
-                    journeyRef = "1" + journeyRef.substring(1);
-                }
+                //if (!journeyRef.startsWith("1")) {
+                    //journeyRef = "1" + journeyRef.substring(1);
+                //}
 
                 if (dbRoutes.contains(line_ref)) {
                     liveRoutes.add(new AbstractMap.SimpleEntry<>(line_ref, journeyRef));
                 }
-                System.out.printf("Route %s, latitude: %s, longitude: %s, Journey ref : %s\n", line_ref, latitude, longitude, journeyRef);
+                //System.out.printf("Route %s, latitude: %s, longitude: %s, Journey ref : %s\n", line_ref, latitude, longitude, journeyRef);
                 count++;
             }
         } catch (Exception e) {
-            System.out.println("Error parsing XML: " + e.getMessage());
+           // System.out.println("Error parsing XML: " + e.getMessage());
         }
         // some journeyRefs are returning as a 5000 instead of 1000, ex: 62=5044. This is erroneus and should be 1044
         System.out.println(liveRoutes);
