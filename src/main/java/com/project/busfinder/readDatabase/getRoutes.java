@@ -96,7 +96,7 @@ public class getRoutes {
             }
         }
 
-        System.out.println(routeExistsMap);
+        //System.out.println(routeExistsMap);
         return routeExistsMap;
     }
 }

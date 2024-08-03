@@ -44,7 +44,8 @@ public class addTimes {
                 "(id INTEGER PRIMARY KEY AUTOINCREMENT, " +
                 "journey_code TEXT NOT NULL, " +
                 "route_id TEXT NOT NULL, " +
-                "journey_pattern_ref TEXT NOT NULL)";
+                "journey_pattern_ref TEXT NOT NULL, " +
+                "Vehicle_journey_code TEXT NOT NULL)";
         try (Statement stmt = conn.createStatement()) {
             stmt.execute(createTableSQL);
         }
@@ -55,6 +56,7 @@ public class addTimes {
                 "(id INTEGER PRIMARY KEY AUTOINCREMENT, " +
                 "route_id TEXT NOT NULL, " +
                 "journey_pattern_ref TEXT NOT NULL, " +
+                "Vehicle_journey_code TEXT NOT NULL, " +
                 "from_stop TEXT NOT NULL, " +
                 "to_stop TEXT NOT NULL, " +
                 "departure_time TEXT NOT NULL)";

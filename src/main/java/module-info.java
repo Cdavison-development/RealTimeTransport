@@ -13,6 +13,11 @@ module com.project.busfinder {
     requires java.sql;
     requires org.json;
     requires java.net.http;
+    requires com.gluonhq.maps;
+    requires com.gluonhq.attach.util;
+    requires com.gluonhq.attach.storage;
+    requires com.dlsc.gmapsfx;
+    requires com.sothawo.mapjfx;
 
     opens com.project.busfinder to javafx.fxml;
     exports com.project.busfinder;

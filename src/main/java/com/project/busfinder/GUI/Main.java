@@ -9,6 +9,10 @@ import javafx.stage.Stage;
 import java.io.IOException;
 import java.net.URL;
 
+import com.gluonhq.maps.MapPoint;
+import com.gluonhq.maps.MapView;
+
+
 public class Main extends Application {
 
     double x,y = 0;
@@ -26,7 +30,7 @@ public class Main extends Application {
             Parent root = loader.load();
 
             primaryStage.setTitle("JavaFX Test");
-            primaryStage.setScene(new Scene(root, 800, 500));
+            primaryStage.setScene(new Scene(root, 1200, 800));
             primaryStage.show();
         } catch (IOException e) {
             e.printStackTrace();

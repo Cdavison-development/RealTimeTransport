@@ -46,6 +46,7 @@ public class ProcessXML {
                     "journey_code TEXT NOT NULL, " +
                     "route_id TEXT NOT NULL, " +
                     "journey_pattern_ref TEXT NOT NULL, " +
+                    "Vehicle_journey_code TEXT NOT NULL, " +
                     "from_stop TEXT NOT NULL, " +
                     "to_stop TEXT NOT NULL, " +
                     "departure_time TEXT NOT NULL)";
@@ -65,6 +66,7 @@ public class ProcessXML {
 
 public static void processXMLAndInsertData(Document doc, Connection conn, String filePath) {
     try {
+        int journeyCounter = 1;
         // process each VehicleJourney and insert data into SQLite
         NodeList vehicleJourneyList = doc.getElementsByTagName("VehicleJourney");
         for (int i = 0; i < vehicleJourneyList.getLength(); i++) {
@@ -76,6 +78,10 @@ public static void processXMLAndInsertData(Document doc, Connection conn, String
             String initialDepartureTime = getDepartureTime(filePath, journeyCode);
             LocalTime departureTime = LocalTime.parse(initialDepartureTime, DateTimeFormatter.ofPattern("HH:mm:ss"));
 
+            //generate the VehicleJourneyRef using the counter
+            String vehicleJourneyRef = "VJ_" + journeyCounter;
+            journeyCounter++; // increment the counter for the next journey
+
             NodeList journeyPatternList = doc.getElementsByTagName("JourneyPattern");
             for (int j = 0; j < journeyPatternList.getLength(); j++) {
                 Element journeyPattern = (Element) journeyPatternList.item(j);
@@ -83,11 +89,12 @@ public static void processXMLAndInsertData(Document doc, Connection conn, String
                     String sectionRef = getNestedTextContent(journeyPattern, "JourneyPatternSectionRefs");
                     NodeList sectionList = doc.getElementsByTagName("JourneyPatternSection");
 
-                    String JourneyCodeSQL = "INSERT INTO journeyCode (journey_code, route_id, journey_pattern_ref) VALUES (?, ?, ?)";
+                    String JourneyCodeSQL = "INSERT INTO journeyCode (journey_code, route_id, journey_pattern_ref,Vehicle_journey_code) VALUES (?, ?, ?,?)";
                     try (PreparedStatement pstmt = conn.prepareStatement(JourneyCodeSQL)) {
                         pstmt.setString(1, journeyCode);
                         pstmt.setString(2, routeId);
                         pstmt.setString(3, journeyPatternRef);
+                        pstmt.setString(4, vehicleJourneyRef);
                         pstmt.executeUpdate();
                     }
 
@@ -106,13 +113,14 @@ public static void processXMLAndInsertData(Document doc, Connection conn, String
                                     Duration duration = Duration.parse(runTime);
                                     departureTime = departureTime.plus(duration);
 
-                                    String insertSQL = "INSERT INTO journeyRoutes (route_id, journey_pattern_ref, from_stop, to_stop, departure_time) VALUES (?, ?, ?, ?, ?)";
+                                    String insertSQL = "INSERT INTO journeyRoutes (route_id, journey_pattern_ref, Vehicle_journey_code,from_stop, to_stop, departure_time) VALUES (?, ?, ?, ?, ?, ?)";
                                     try (PreparedStatement pstmt = conn.prepareStatement(insertSQL)) {
                                         pstmt.setString(1, routeId);
                                         pstmt.setString(2, journeyPatternRef);
-                                        pstmt.setString(3, fromStop);
-                                        pstmt.setString(4, toStop);
-                                        pstmt.setString(5, departureTime.format(DateTimeFormatter.ofPattern("HH:mm:ss")));
+                                        pstmt.setString(3, vehicleJourneyRef);
+                                        pstmt.setString(4, fromStop);
+                                        pstmt.setString(5, toStop);
+                                        pstmt.setString(6, departureTime.format(DateTimeFormatter.ofPattern("HH:mm:ss")));
                                         pstmt.executeUpdate();
                                     }
                                 } else {

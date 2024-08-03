@@ -8,8 +8,8 @@
 <?import javafx.scene.layout.RowConstraints?>
 <?import javafx.scene.layout.VBox?>
 
-<VBox fx:id="sidepanel" layoutY="12.0" prefHeight="400.0" prefWidth="190.0" style="-fx-background-color: #fcba03;" visible="true" xmlns="http://javafx.com/javafx/22" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.project.busfinder.GUI.TrackBusPanelController">
-<GridPane fx:id="trackBusGridpane" alignment="CENTER" prefHeight="448.0" prefWidth="190.0" xmlns="http://javafx.com/javafx/22" xmlns:fx="http://javafx.com/fxml/1">
+<VBox fx:id="sidepanel" layoutY="12.0" prefHeight="400.0" prefWidth="190.0" style="-fx-background-color: #fcba03;" visible="true" xmlns="http://javafx.com/javafx/16" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.project.busfinder.GUI.TrackBusPanelController">
+<GridPane fx:id="trackBusGridpane" alignment="CENTER" prefHeight="448.0" prefWidth="190.0" xmlns="http://javafx.com/javafx/16" xmlns:fx="http://javafx.com/fxml/1">
     <columnConstraints>
         <ColumnConstraints hgrow="SOMETIMES" minWidth="10.0" prefWidth="100.0" />
     </columnConstraints>
@@ -22,14 +22,14 @@
     </rowConstraints>
    <children>
       <Button fx:id="returnButton" mnemonicParsing="false" onAction="#moveToStartingPage" text="&lt;-" GridPane.halignment="LEFT" />
-      <Button mnemonicParsing="false" text="reset" GridPane.halignment="RIGHT" />
+      <Button fx:id="resetButton" mnemonicParsing="false" onAction="#reloadRoutesPage" text="reset" GridPane.halignment="RIGHT" />
       <Button mnemonicParsing="false" text="Button" GridPane.halignment="CENTER" GridPane.rowIndex="3" GridPane.valignment="CENTER">
          <GridPane.margin>
             <Insets />
          </GridPane.margin>
       </Button>
       <ComboBox fx:id="routesComboBox" prefHeight="44.0" prefWidth="190.0" promptText="Enter bus service" GridPane.rowIndex="1" />
-         <ComboBox prefHeight="25.0" prefWidth="197.0" promptText="Choose departure Time" visible="false" GridPane.rowIndex="2" />
+         <ComboBox fx:id="departureTimeComboBox" prefHeight="25.0" prefWidth="197.0" promptText="Choose departure Time" visible="false" GridPane.rowIndex="2" />
    </children>
 </GridPane>
 </VBox>
