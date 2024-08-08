@@ -1,97 +1,152 @@
 package com.project.busfinder.util;
-
+import java.util.ArrayList;
+import java.util.List;
 import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.util.List;
 import java.util.stream.Collectors;
-import java.util.ArrayList;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+import com.sothawo.mapjfx.Coordinate;
+
+import java.io.IOException;
+import java.lang.reflect.Type;
+
+
 
 
 public class PolylineDecoder {
-    //public field for latitude and longitude
-    public static class Coordinate {
-        public double latitude;
-        public double longitude;
-        // initialise latitude and longitude
-        public Coordinate(double latitude, double longitude) {
-            this.latitude = latitude;
-            this.longitude = longitude;
-        }
 
-        @Override
-        public String toString() {
-            // Coordinate in "longitude latitude" format for LINESTRING compatibility
-            return longitude + " " + latitude;
-        }
-    }
+
+    private static final double DISTANCE_THRESHOLD = 2 ;
+
     public static List<Coordinate> decodePolyline(String encoded) {
-        //list to store decoded coordinates
         List<Coordinate> polyline = new ArrayList<>();
         int index = 0, len = encoded.length();
         int lat = 0, lng = 0;
 
-        // Loop through the encoded polyline string
         while (index < len) {
             int b, shift = 0, result = 0;
-            // decode latitude
             do {
+                if (index >= len) {
+                    return polyline;
+                }
                 b = encoded.charAt(index++) - 63;
                 result |= (b & 0x1f) << shift;
                 shift += 5;
             } while (b >= 0x20);
+
             int dlat = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
             lat += dlat;
 
             shift = 0;
             result = 0;
-
-            //decode longitude
             do {
+                if (index >= len) {
+                    return polyline;
+                }
                 b = encoded.charAt(index++) - 63;
                 result |= (b & 0x1f) << shift;
                 shift += 5;
             } while (b >= 0x20);
+
             int dlng = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
             lng += dlng;
 
-            //convert to decimal degrees and add to the list
-            double latD = lat / 1E5;
-            double lngD = lng / 1E5;
-            polyline.add(new Coordinate(latD, lngD));
+            Coordinate coordinate = new Coordinate(lat / 1E5, lng / 1E5);
+            System.out.println("Decoded coordinate: " + coordinate);
+            polyline.add(coordinate);
         }
-        //return list of decoded coordinates
         return polyline;
     }
 
-    public static String readPolylineFromFile(String filePath) throws IOException {
-        //read encoded polyline from file
-        return new String(Files.readAllBytes(Paths.get(filePath)));
+    public static List<Coordinate> decodeAndConcatenatePolylinesFromString(String json) {
+        Gson gson = new Gson();
+        Type listType = new TypeToken<List<String>>() {}.getType();
+        List<String> encodedPolylines = gson.fromJson(json, listType);
+
+        List<Coordinate> concatenatedPolyline = new ArrayList<>();
+        for (String encodedPolyline : encodedPolylines) {
+            List<Coordinate> decodedPolyline = decodePolyline(encodedPolyline);
+            concatenatedPolyline.addAll(decodedPolyline);
+        }
+
+        return concatenatedPolyline;
     }
 
+
+    private static List<Coordinate> filterLongSegments(List<Coordinate> coordinates) {
+        List<Coordinate> filteredCoordinates = new ArrayList<>();
+        if (coordinates.isEmpty()) {
+            return filteredCoordinates;
+        }
+
+        filteredCoordinates.add(coordinates.get(0));
+
+        for (int i = 1; i < coordinates.size(); i++) {
+            Coordinate previous = filteredCoordinates.get(filteredCoordinates.size() - 1);
+            Coordinate current = coordinates.get(i);
+            double distance = haversineDistance(previous.getLatitude(), previous.getLongitude(), current.getLatitude(), current.getLongitude());
+            System.out.printf("Distance from [%f, %f] to [%f, %f]: %f km%n",
+                    previous.getLatitude(), previous.getLongitude(),
+                    current.getLatitude(), current.getLongitude(),
+                    distance);
+            if (distance <= DISTANCE_THRESHOLD) {
+                filteredCoordinates.add(current);
+            } else {
+                System.out.println("Skipping segment from " + previous + " to " + current + " due to long distance: " + distance + " km");
+            }
+        }
+
+        return filteredCoordinates;
+    }
+
+    private static double haversineDistance(double lat1, double lon1, double lat2, double lon2) {
+        final int R = 6371; // radius of earth
+
+
+        double lat1Rad = Math.toRadians(lat1);
+        double lon1Rad = Math.toRadians(lon1);
+        double lat2Rad = Math.toRadians(lat2);
+        double lon2Rad = Math.toRadians(lon2);
+
+
+        System.out.printf("Lat1: %f, Lon1: %f, Lat2: %f, Lon2: %f%n", lat1, lon1, lat2, lon2);
+        System.out.printf("Lat1 (rad): %f, Lon1 (rad): %f, Lat2 (rad): %f, Lon2 (rad): %f%n", lat1Rad, lon1Rad, lat2Rad, lon2Rad);
+
+
+        double dLat = lat2Rad - lat1Rad;
+        double dLon = lon2Rad - lon1Rad;
+
+
+        System.out.printf("dLat: %f, dLon: %f%n", dLat, dLon);
+
+
+        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(lat1Rad) * Math.cos(lat2Rad) *
+                        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        double distance = R * c;
+
+
+        System.out.printf("a: %f, c: %f, Distance: %f km%n", a, c, distance);
+
+        return distance;
+    }
     public static void main(String[] args) {
-        try {
-            // read encoded polyline from file
-            String polyline = readPolylineFromFile("data/encoded_polyline.txt");
-            // Decode the polyline into a list of coordinates
-            List<Coordinate> decoded = decodePolyline(polyline);
+        // Example JSON array string of encoded polylines
+        String jsonString = "[\"wbgeIjytOPiCQE@LCVW|CILC?MCM|AARYvCq@`FD?RN@XLdA^tERhCUNy@T\","
+                + "\"{fgeIjzuOx@Un@a@dAg@d@g@`AgAL@fCpEr@nA\","
+                + "\"qxfeI`{uOGLdAhB^JBGNGHBHJBP?RENCDJdBh@bBHPCJOZi@bAWf@o@nB]z@MTsAdBQVM^?PC`@ENJNJr@Nl@b@nARl@@C\","
+                + "\"_yfeI`awOABVt@ZhAjBtFZFTPlAp@fBzA`BpBbBlCf@lA\","
+                + "\"kefeIp|wOPl@h@dCtA`IDd@Ab@Ip@_@zBFD\"]";
 
-            // Generate LINESTRING format
-            String linestring = "LINESTRING (" + decoded.stream()
-                    .map(Coordinate::toString)
-                    .collect(Collectors.joining(", ")) + ")";
-
-            // Write Linestring to file
-            writeLinestringToFile(linestring, "data/linestring_output.txt");
-
-            System.out.println("Linestring has been written to file.");
-            System.out.println("Total Coordinates: " + decoded.size());
-        } catch (IOException e) {
-            //handle exceptions
-            System.err.println("An error occurred: " + e.getMessage());
-            e.printStackTrace();
+        List<Coordinate> polyline = decodeAndConcatenatePolylinesFromString(routeData.getPolylineData());
+        System.out.println("Concatenated Polyline:");
+        for (Coordinate coord : polyline) {
+            System.out.println("Lat: " + coord.getLatitude() + ", Lon: " + coord.getLongitude());
         }
     }
 

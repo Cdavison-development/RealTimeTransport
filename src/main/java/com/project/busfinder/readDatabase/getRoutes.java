@@ -78,7 +78,7 @@ public class getRoutes {
                 ResultSet rs = pstmt.executeQuery();
 
                 if (rs.next()) {
-                    // Print or process the matching data
+
                     String journeyCode = rs.getString("journey_code");
                     String route_id = rs.getString("route_id");
 
@@ -86,7 +86,7 @@ public class getRoutes {
                     //System.out.println("journeyCode: " + journeyCode);
                     //System.out.println("route_id: " + route_id);
 
-                    // Update the map to mark this route as true
+
                     routeExistsMap.put(route, true);
                 } else {
                     //System.out.println("No matching journey found for Route: " + route + ", Pattern: " + pattern);

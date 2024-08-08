@@ -35,8 +35,9 @@ public class simulateBusLocations {
 
     private static Connection conn;
 
-    public static void main(String[] args) throws IOException, InterruptedException {
+    public static void main(String[] args) throws IOException, InterruptedException, SQLException {
         //initializeDatabaseConnection();
+        /**
         try {
             List<JourneyInfo> journeyInfoList = findClosestDepartureTime();
             for (JourneyInfo info : journeyInfoList) {
@@ -45,11 +46,23 @@ public class simulateBusLocations {
         } catch (IOException | InterruptedException e) {
             e.printStackTrace();
         }
+         **/
+        initializeDatabaseConnection();
+        String routeId = "345";
+        String vehicleJourneyCode = "VJ_29";
+
+        List<JourneyLeg> journeyLegs = getJourneyLegs(routeId, vehicleJourneyCode);
+
+        // Print each JourneyLeg to verify the data
+        System.out.println("Journey Legs:");
+        for (JourneyLeg leg : journeyLegs) {
+            System.out.println(leg);
+        }
     }
 
     private static void initializeDatabaseConnection() {
         try {
-            //attempt to connect to database at the specified path
+
             conn = DriverManager.getConnection("jdbc:sqlite:data/databases/routes.db");
         } catch (SQLException e) {
             e.printStackTrace();
@@ -61,7 +74,7 @@ public class simulateBusLocations {
 
         List<JourneyInfo> journeyInfoList = new ArrayList<>();
 
-        // simulate fetching live routes - replace with actual call
+
         ArrayList<AbstractMap.SimpleEntry<String, String>> routes = readLiveLocation.processXmlResponse(fetchAndProcessResponse());
 
         for (AbstractMap.SimpleEntry<String, String> entry : routes) {
@@ -130,6 +143,7 @@ public class simulateBusLocations {
                             if (hasDepartureTimes && closestDepartureTime != null) {
                                 JourneyInfo journeyInfo = new JourneyInfo(
                                         vehicleJourneyCode,
+                                        route,
                                         closestDepartureTime,
                                         closestFromStop,
                                         closestToStop,
@@ -145,8 +159,41 @@ public class simulateBusLocations {
                 e.printStackTrace();
             }
         }
-
+        System.out.println(journeyInfoList);
         return journeyInfoList;
+    }
+
+    public static List<JourneyLeg> getJourneyLegs(String routeId, String vehicleJourneyCode) throws SQLException {
+        List<JourneyLeg> journeyLegs = new ArrayList<>();
+
+        String query = """
+            SELECT jr.departure_time, jr.from_stop, jr.to_stop, bs.longitude, bs.latitude
+            FROM journeyRoutes jr
+            JOIN bus_stops bs ON jr.from_stop = bs.stop_id
+            WHERE jr.route_id = ? AND jr.Vehicle_journey_code = ?
+            ORDER BY jr.departure_time
+        """;
+
+        try (PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setString(1, routeId);
+            pstmt.setString(2, vehicleJourneyCode);
+
+            ResultSet rs = pstmt.executeQuery();
+
+            while (rs.next()) {
+                String departureTimeString = rs.getString("departure_time");
+                String fromStop = rs.getString("from_stop");
+                String toStop = rs.getString("to_stop");
+                double longitude = rs.getDouble("longitude");
+                double latitude = rs.getDouble("latitude");
+
+                LocalTime departureTime = LocalTime.parse(departureTimeString, DateTimeFormatter.ofPattern("HH:mm:ss"));
+
+                JourneyLeg leg = new JourneyLeg(fromStop, toStop, departureTime);
+                journeyLegs.add(leg);
+            }
+        }
+        return journeyLegs;
     }
 }
 

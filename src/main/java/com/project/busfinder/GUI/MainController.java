@@ -4,12 +4,15 @@ package com.project.busfinder.GUI;
 import com.gluonhq.maps.MapLayer;
 import com.gluonhq.maps.MapPoint;
 //import com.gluonhq.maps.MapView;
-import com.project.busfinder.Mapping.JourneyInfo;
+import com.project.busfinder.Mapping.*;
+import com.project.busfinder.util.CoordinateConverter;
+import com.project.busfinder.util.PolylineDecoder;
 import com.sothawo.mapjfx.*;
 import com.sothawo.mapjfx.event.MapViewEvent;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.animation.TranslateTransition;
+import javafx.application.Platform;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
@@ -19,7 +22,14 @@ import javafx.scene.layout.VBox;
 import javafx.util.Duration;
 import javafx.scene.layout.*;
 import java.io.IOException;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
+
 import com.sothawo.mapjfx.event.MarkerEvent;
+
+import static com.project.busfinder.Mapping.simulateBusLocations.findClosestDepartureTime;
+import static com.project.busfinder.Mapping.simulateBusLocations.getJourneyLegs;
 
 
 /**
@@ -47,85 +57,100 @@ public class MainController {
 
 
     private boolean isPanelOpen = false;
-    private static final Coordinate coordKarlsruheHarbour = new Coordinate(49.015511, 8.323497);
 
-    private static final Coordinate coordKarlsruheCastle = new Coordinate(49.013517, 8.404435);
-    private static final Coordinate coordKarlsruheStation = new Coordinate(48.993284, 8.402186);
-    private static final Coordinate coordKarlsruheSoccer = new Coordinate(49.020035, 8.412975);
-    private static final Coordinate coordKarlsruheUniversity = new Coordinate(49.011809, 8.413639);
-    private static final Extent extentAllLocations = Extent.forCoordinates(coordKarlsruheCastle, coordKarlsruheHarbour, coordKarlsruheStation, coordKarlsruheSoccer);
+    private BusIconController BusIconController;
+    private RouteService routeService;
 
-    private final Marker markerKaHarbour;
-    private final Marker markerKaCastle;
-    private final Marker markerKaStation;
-    private final Marker markerKaSoccer;
-    private final Marker markerClick;
+    private final String markerImagePath = "/com/project/busfinder/GUI/images/bus3.png";
+    private CoordinateLine coordinateLine;
+
+
 
     public MainController() {
-        markerKaHarbour = Marker.createProvided(Marker.Provided.BLUE).setPosition(coordKarlsruheHarbour).setVisible(
-                false);
-        markerKaCastle = Marker.createProvided(Marker.Provided.GREEN).setPosition(coordKarlsruheCastle).setVisible(
-                false);
-        markerKaStation =
-                Marker.createProvided(Marker.Provided.RED).setPosition(coordKarlsruheStation).setVisible(false);
 
-        markerClick = Marker.createProvided(Marker.Provided.ORANGE).setVisible(false);
-
-        // a marker with a custom icon
-        markerKaSoccer = new Marker(getClass().getResource("/com/project/busfinder/GUI/images/arrow4.png"), -20, -20).setPosition(coordKarlsruheSoccer)
-                .setVisible(false);
     }
 
     @FXML
-    public void initialize() {
-        configureMapView();
+    public void initialize() throws IOException, InterruptedException {
+        // initialise the RouteService and BusSimulator
+        routeService = new RouteService();
+        BusIconController = new BusIconController(mapView);
+        BusIconController.initializeMap();
+
+
+        Configuration configuration = Configuration.builder()
+                .showZoomControls(true)
+                .build();
+
+        mapView.initialize(configuration);
+
+
+        mapView.initializedProperty().addListener((observable, oldValue, newValue) -> {
+            if (newValue) {
+                try {
+                    Platform.runLater(() -> {
+                        try {
+                            onMapInitialized();
+                        } catch (IOException | InterruptedException | SQLException e) {
+                            e.printStackTrace();
+                        }
+                    });
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        });
 
         setupPanels();
     }
 
 
-    private void configureMapView() {
-        mapView.initialize(Configuration.builder().build());
 
-        mapView.setCenter(new Coordinate(48.2081743, 16.3738189)); //example coordinates
-        mapView.setZoom(12);
+    private void createBusMarkers() throws IOException, InterruptedException {
 
-        mapView.addEventHandler(MapViewEvent.MAP_CLICKED, event -> {
-            Coordinate clickedCoord = event.getCoordinate();
-            System.out.println("Map clicked at: " + clickedCoord.getLatitude() + ", " + clickedCoord.getLongitude());
-        });
-
-        mapView.initializedProperty().addListener((observable, oldValue, newValue) -> {
-            if (newValue) {
-                addMarkersToMap();
-            }
-        });
-
+        List<JourneyInfo> busInfos = findClosestDepartureTime();
+        BusIconController.createBusMarkers(busInfos);
     }
+    private void onMapInitialized() throws IOException, InterruptedException, SQLException {
 
-    private void addMarkersToMap() {
-
-        mapView.addMarker(markerKaHarbour);
-        mapView.addMarker(markerKaCastle);
-        mapView.addMarker(markerKaStation);
-        mapView.addMarker(markerClick);
-        mapView.addMarker(markerKaSoccer);
+        List<JourneyInfo> journeyInfos = simulateBusLocations.findClosestDepartureTime();
 
 
-        markerKaHarbour.setVisible(true);
-        markerKaCastle.setVisible(true);
-        markerKaSoccer.setVisible(true);
+        String targetRouteId = "10A";
+        String vehicleJourneyCode = "VJ_48";
+
+        journeyInfos.stream()
+                .filter(info -> info.getRoute().equals(targetRouteId))
+                .findFirst()
+                .ifPresent(journeyInfo -> {
+                    try {
+                        List<JourneyLeg> journeyLegs = getJourneyLegs(targetRouteId, vehicleJourneyCode);
+                        if (!journeyLegs.isEmpty()) {
+                            //decode polyline and plot on map
+                            RouteData routeData = routeService.getRouteData(targetRouteId);
+                            String polylineData = routeData.getPolylineData();
 
 
+                            System.out.println("Polyline Data Length: " + polylineData.length());
+                            System.out.println("Polyline Data: " + polylineData);
 
+                            List<Coordinate> routeCoordinates = PolylineDecoder.decodeAndConcatenatePolylinesFromString(polylineData);
+                            coordinateLine = com.project.busfinder.GUI.BusIconController.createCoordinateLine(routeCoordinates);
+                            Platform.runLater(() -> {
+                                mapView.addCoordinateLine(coordinateLine);
+                                System.out.println("Polyline added to map view");
+                            });
 
-        mapView.addEventHandler(MapViewEvent.MAP_CLICKED, event -> {
-            Coordinate clickLocation = event.getCoordinate();
-            markerClick.setPosition(clickLocation);
-            markerClick.setVisible(true);
-
-        });
-
+                            // start simulation
+                            Coordinate initialCoordinate = new Coordinate(journeyInfo.getLatitude(), journeyInfo.getLongitude());
+                            BusIconController.startBusMovement(journeyLegs, routeCoordinates,initialCoordinate);
+                        } else {
+                            Platform.runLater(() -> System.out.println("No journey legs found for the specified vehicle journey code."));
+                        }
+                    } catch (SQLException e) {
+                        Platform.runLater(() -> e.printStackTrace());
+                    }
+                });
     }
 
     /**
@@ -206,4 +231,5 @@ public class MainController {
     private void loadTrackBusPanel(ActionEvent event) {
         loadSidePanel("/com/project/busfinder/GUI/trackBusPanel.fxml");
     }
+
 }

@@ -18,6 +18,7 @@ module com.project.busfinder {
     requires com.gluonhq.attach.storage;
     requires com.dlsc.gmapsfx;
     requires com.sothawo.mapjfx;
+    requires com.google.gson;
 
     opens com.project.busfinder to javafx.fxml;
     exports com.project.busfinder;
@@ -27,5 +28,7 @@ module com.project.busfinder {
     opens com.project.busfinder.helperFunctions to javafx.fxml;
     exports com.project.busfinder.GUI;
     opens com.project.busfinder.GUI to javafx.fxml;
+    exports com.project.busfinder.Mapping;
+    opens com.project.busfinder.Mapping to javafx.fxml;
 
 }
