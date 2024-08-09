@@ -76,6 +76,20 @@ public class PolylineDecoder {
         return concatenatedPolyline;
     }
 
+    public static List<List<Coordinate>> decodePolylinesIndividually(String json) {
+        Gson gson = new Gson();
+        Type listType = new TypeToken<List<String>>() {}.getType();
+        List<String> encodedPolylines = gson.fromJson(json, listType);
+
+        List<List<Coordinate>> allPolylines = new ArrayList<>();
+        for (String encodedPolyline : encodedPolylines) {
+            List<Coordinate> decodedPolyline = decodePolyline(encodedPolyline);
+            allPolylines.add(decodedPolyline);  // add each decoded polyline as a separate list
+        }
+
+        return allPolylines;
+    }
+
 
     private static List<Coordinate> filterLongSegments(List<Coordinate> coordinates) {
         List<Coordinate> filteredCoordinates = new ArrayList<>();
@@ -136,18 +150,18 @@ public class PolylineDecoder {
         return distance;
     }
     public static void main(String[] args) {
-        // Example JSON array string of encoded polylines
+
         String jsonString = "[\"wbgeIjytOPiCQE@LCVW|CILC?MCM|AARYvCq@`FD?RN@XLdA^tERhCUNy@T\","
                 + "\"{fgeIjzuOx@Un@a@dAg@d@g@`AgAL@fCpEr@nA\","
                 + "\"qxfeI`{uOGLdAhB^JBGNGHBHJBP?RENCDJdBh@bBHPCJOZi@bAWf@o@nB]z@MTsAdBQVM^?PC`@ENJNJr@Nl@b@nARl@@C\","
                 + "\"_yfeI`awOABVt@ZhAjBtFZFTPlAp@fBzA`BpBbBlCf@lA\","
                 + "\"kefeIp|wOPl@h@dCtA`IDd@Ab@Ip@_@zBFD\"]";
 
-        List<Coordinate> polyline = decodeAndConcatenatePolylinesFromString(routeData.getPolylineData());
-        System.out.println("Concatenated Polyline:");
-        for (Coordinate coord : polyline) {
-            System.out.println("Lat: " + coord.getLatitude() + ", Lon: " + coord.getLongitude());
-        }
+        //List<Coordinate> polyline = decodeAndConcatenatePolylinesFromString(routeData.getPolylineData());
+        //System.out.println("Concatenated Polyline:");
+        //for (Coordinate coord : polyline) {
+            //System.out.println("Lat: " + coord.getLatitude() + ", Lon: " + coord.getLongitude());
+        //}
     }
 
     public static void writeLinestringToFile(String linestring, String filePath) throws IOException {

@@ -117,7 +117,7 @@ public class MainController {
 
 
         String targetRouteId = "10A";
-        String vehicleJourneyCode = "VJ_48";
+        String vehicleJourneyCode = "VJ_105";
 
         journeyInfos.stream()
                 .filter(info -> info.getRoute().equals(targetRouteId))
@@ -135,9 +135,9 @@ public class MainController {
                             System.out.println("Polyline Data: " + polylineData);
 
                             List<Coordinate> routeCoordinates = PolylineDecoder.decodeAndConcatenatePolylinesFromString(polylineData);
-                            coordinateLine = com.project.busfinder.GUI.BusIconController.createCoordinateLine(routeCoordinates);
+                            //BusIconController.plotIndividualPolylines(polylineData);
                             Platform.runLater(() -> {
-                                mapView.addCoordinateLine(coordinateLine);
+                                BusIconController.plotIndividualPolylines(polylineData);
                                 System.out.println("Polyline added to map view");
                             });
 
