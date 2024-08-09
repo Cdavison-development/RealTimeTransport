@@ -32,12 +32,10 @@ import static com.project.busfinder.Mapping.simulateBusLocations.findClosestDepa
 import static com.project.busfinder.Mapping.simulateBusLocations.getJourneyLegs;
 
 
-/**
- *
- * Next: fork from gluon or find way to change content of com.gluonhq.impl.maps.BaseMap zoom so that what is considered too small fits our boundaries
- *
- *
- */
+
+//TODO: allow user to click on bus for live tracking and route details. same for searching from the side bar.
+// remove completed bus routes/ add new bus routes
+//
 public class MainController {
     @FXML
     private VBox sidePanel;
@@ -107,50 +105,46 @@ public class MainController {
 
 
     private void createBusMarkers() throws IOException, InterruptedException {
-
         List<JourneyInfo> busInfos = findClosestDepartureTime();
         BusIconController.createBusMarkers(busInfos);
     }
+
+
     private void onMapInitialized() throws IOException, InterruptedException, SQLException {
 
         List<JourneyInfo> journeyInfos = simulateBusLocations.findClosestDepartureTime();
 
+        for (JourneyInfo journeyInfo : journeyInfos) {
+            String routeId = journeyInfo.getRoute();
+            String vehicleJourneyCode = journeyInfo.getVehicleJourneyCode();
 
-        String targetRouteId = "10A";
-        String vehicleJourneyCode = "VJ_105";
+            try {
 
-        journeyInfos.stream()
-                .filter(info -> info.getRoute().equals(targetRouteId))
-                .findFirst()
-                .ifPresent(journeyInfo -> {
-                    try {
-                        List<JourneyLeg> journeyLegs = getJourneyLegs(targetRouteId, vehicleJourneyCode);
-                        if (!journeyLegs.isEmpty()) {
-                            //decode polyline and plot on map
-                            RouteData routeData = routeService.getRouteData(targetRouteId);
-                            String polylineData = routeData.getPolylineData();
+                List<JourneyLeg> journeyLegs = getJourneyLegs(routeId, vehicleJourneyCode);
+                if (!journeyLegs.isEmpty()) {
+
+                    RouteData routeData = routeService.getRouteData(routeId);
+                    String polylineData = routeData.getPolylineData();
+
+                    System.out.println("Polyline Data Length: " + polylineData.length());
+                    System.out.println("Polyline Data: " + polylineData);
+
+                    List<Coordinate> routeCoordinates = PolylineDecoder.decodeAndConcatenatePolylinesFromString(polylineData);
+
+                    Platform.runLater(() -> {
+                        //BusIconController.plotIndividualPolylines(polylineData);
+                        //System.out.println("Polyline added to map view for route: " + routeId);
+                    });
 
 
-                            System.out.println("Polyline Data Length: " + polylineData.length());
-                            System.out.println("Polyline Data: " + polylineData);
-
-                            List<Coordinate> routeCoordinates = PolylineDecoder.decodeAndConcatenatePolylinesFromString(polylineData);
-                            //BusIconController.plotIndividualPolylines(polylineData);
-                            Platform.runLater(() -> {
-                                BusIconController.plotIndividualPolylines(polylineData);
-                                System.out.println("Polyline added to map view");
-                            });
-
-                            // start simulation
-                            Coordinate initialCoordinate = new Coordinate(journeyInfo.getLatitude(), journeyInfo.getLongitude());
-                            BusIconController.startBusMovement(journeyLegs, routeCoordinates,initialCoordinate);
-                        } else {
-                            Platform.runLater(() -> System.out.println("No journey legs found for the specified vehicle journey code."));
-                        }
-                    } catch (SQLException e) {
-                        Platform.runLater(() -> e.printStackTrace());
-                    }
-                });
+                    BusIconController.startBusMovement(journeyInfo, journeyLegs, routeCoordinates);
+                } else {
+                    Platform.runLater(() -> System.out.println("No journey legs found for Vehicle Journey Code: " + vehicleJourneyCode));
+                }
+            } catch (SQLException e) {
+                Platform.runLater(() -> e.printStackTrace());
+            }
+        }
     }
 
     /**

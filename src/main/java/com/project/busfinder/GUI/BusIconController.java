@@ -14,10 +14,7 @@ import javafx.util.Duration;
 
 import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import static com.project.busfinder.Mapping.polylineHelpers.findClosestSegmentIndices;
 import static com.project.busfinder.util.PolylineDecoder.decodePolylinesIndividually;
@@ -33,6 +30,7 @@ public class BusIconController {
     private final StopService stopService;
     private final String markerImagePath = "/com/project/busfinder/GUI/images/bus3.png";
     private final List<Marker> busMarkers = new ArrayList<>();
+    private Map<String, Marker> busMarkerMAPs;
     private CoordinateLine routeLine;
     private Timeline timeline;
 
@@ -40,6 +38,7 @@ public class BusIconController {
     public BusIconController(MapView mapView) {
         this.mapView = mapView;
         this.stopService = new StopService();
+        busMarkerMAPs = new HashMap<>();
     }
 
     public void setMapView(MapView mapView) {
@@ -89,7 +88,17 @@ public class BusIconController {
                 .setWidth(5);
         return coordinateLine;
     }
-    public void startBusMovement(List<JourneyLeg> journeyLegs, List<Coordinate> routeCoordinates,Coordinate initialCoordinate) {
+
+    public void startBusMovement(JourneyInfo journeyInfo, List<JourneyLeg> journeyLegs, List<Coordinate> routeCoordinates) {
+        String vehicleJourneyCode = journeyInfo.getVehicleJourneyCode();
+
+
+        if (routeCoordinates == null || routeCoordinates.isEmpty()) {
+            System.out.println("Route coordinates are null or empty. Cannot start bus movement.");
+            return;
+        }
+
+
         List<String> stopIds = journeyLegs.stream()
                 .flatMap(leg -> List.of(leg.getFromStop(), leg.getToStop()).stream())
                 .distinct()
@@ -97,22 +106,33 @@ public class BusIconController {
 
         Map<String, Coordinate> stopCoordinates = stopService.getStopCoordinates(stopIds);
 
+        if (stopCoordinates == null || stopCoordinates.isEmpty()) {
+            System.out.println("Stop coordinates are null or empty. Cannot start bus movement.");
+            return;
+        }
+
 
         placeMarkersAtStops(stopCoordinates);
 
 
-        busMarker = new Marker(getClass().getResource(markerImagePath), -10, -10)
-                .setPosition(initialCoordinate)
+        Marker busMarker = new Marker(getClass().getResource(markerImagePath), -10, -10)
+                .setPosition(new Coordinate(journeyInfo.getLatitude(), journeyInfo.getLongitude()))
                 .setVisible(true);
+
+        busMarkerMAPs.put(vehicleJourneyCode, busMarker);
 
         Platform.runLater(() -> mapView.addMarker(busMarker));
 
-        timeline = new Timeline(new KeyFrame(Duration.millis(500), event -> {
-            moveBus(journeyLegs, routeCoordinates,stopCoordinates);
+
+        Timeline busTimeline = new Timeline(new KeyFrame(Duration.millis(500), event -> {
+            moveBus(busMarker, journeyLegs, routeCoordinates, stopCoordinates);
         }));
-        timeline.setCycleCount(Timeline.INDEFINITE);
-        timeline.play();
+        busTimeline.setCycleCount(Timeline.INDEFINITE);
+        busTimeline.play();
     }
+
+
+
     private void placeMarkersAtStops(Map<String, Coordinate> stopCoordinates) {
         Platform.runLater(() -> {
             stopCoordinates.forEach((stopId, coordinate) -> {
@@ -147,14 +167,8 @@ public class BusIconController {
             System.out.println("Polylines re-rendered after extent change.");
         });
     }
-    private void moveBus(List<JourneyLeg> journeyLegs, List<Coordinate> routeCoordinates, Map<String, Coordinate> stopCoordinates) {
+    private void moveBus(Marker busMarker, List<JourneyLeg> journeyLegs, List<Coordinate> routeCoordinates, Map<String, Coordinate> stopCoordinates) {
         LocalTime currentTime = LocalTime.now();
-        //System.out.println("Current Time: " + currentTime);
-
-        if (routeCoordinates.size() < 2) {
-            System.out.println("Not enough points in polyline to determine route");
-            return;
-        }
 
         for (int i = 0; i < journeyLegs.size(); i++) {
             JourneyLeg leg = journeyLegs.get(i);
@@ -166,12 +180,8 @@ public class BusIconController {
                 long elapsedSeconds = departureTime.until(currentTime, ChronoUnit.SECONDS);
                 double progress = (double) elapsedSeconds / totalSeconds;
 
-
-                if (progress < 0) {
-                    progress = 0;
-                } else if (progress > 1) {
-                    progress = 1;
-                }
+                if (progress < 0) progress = 0;
+                if (progress > 1) progress = 1;
 
                 Coordinate fromStop = stopCoordinates.get(leg.getFromStop());
                 Coordinate toStop = stopCoordinates.get(leg.getToStop());
@@ -186,15 +196,8 @@ public class BusIconController {
 
                 if (fromSegmentIndices[0] == -1 || toSegmentIndices[0] == -1 || fromSegmentIndices[0] >= toSegmentIndices[0]) {
                     System.out.println("Invalid indices for from/to stops in polyline");
-                    System.out.println("FromStop: " + fromStop + ", ToStop: " + toStop);
-                    System.out.println("FromSegmentIndices: " + Arrays.toString(fromSegmentIndices) + ", ToSegmentIndices: " + Arrays.toString(toSegmentIndices));
-                    System.out.println("Coordinates around FromSegmentIndices:");
-                    for (int j = Math.max(0, fromSegmentIndices[0] - 5); j < Math.min(routeCoordinates.size(), fromSegmentIndices[0] + 5); j++) {
-                       // System.out.println("Index " + j + ": " + routeCoordinates.get(j));
-                    }
                     return;
                 }
-
 
                 int segmentLength = toSegmentIndices[1] - fromSegmentIndices[0];
                 double segmentProgress = progress * segmentLength;
@@ -214,16 +217,11 @@ public class BusIconController {
                 Coordinate newPosition = new Coordinate(newLatitude, newLongitude);
                 busMarker.setPosition(newPosition);
 
-                //System.out.printf("Current Bus Position: Lat: %.6f, Lon: %.6f%n", newLatitude, newLongitude);
 
-                //Platform.runLater(() -> mapView.setCenter(newPosition));
+                // Platform.runLater(() -> mapView.setCenter(newPosition));
                 break;
-            } else {
-                System.out.println("Current time is not within this leg's interval.");
             }
         }
     }
 
 }
-
-
