@@ -1,14 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<?import javafx.geometry.Insets?>
-<?import javafx.scene.control.Button?>
-<?import javafx.scene.control.ComboBox?>
-<?import javafx.scene.layout.ColumnConstraints?>
-<?import javafx.scene.layout.GridPane?>
-<?import javafx.scene.layout.RowConstraints?>
-<?import javafx.scene.layout.VBox?>
+<?import javafx.geometry.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
 
-<VBox fx:id="sidepanel" layoutY="12.0" prefHeight="400.0" prefWidth="190.0" style="-fx-background-color: #fcba03;" visible="true" xmlns="http://javafx.com/javafx/16" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.project.busfinder.GUI.TrackBusPanelController">
+<VBox fx:id="sidepanel" layoutY="12.0" prefHeight="400.0" prefWidth="190.0" style="-fx-background-color: #fcba03;" visible="true" xmlns="http://javafx.com/javafx/17.0.2-ea" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.project.busfinder.GUI.TrackBusPanelController">
 <GridPane fx:id="trackBusGridpane" alignment="CENTER" prefHeight="448.0" prefWidth="190.0" xmlns="http://javafx.com/javafx/16" xmlns:fx="http://javafx.com/fxml/1">
     <columnConstraints>
         <ColumnConstraints hgrow="SOMETIMES" minWidth="10.0" prefWidth="100.0" />
@@ -23,7 +19,7 @@
    <children>
       <Button fx:id="returnButton" mnemonicParsing="false" onAction="#moveToStartingPage" text="&lt;-" GridPane.halignment="LEFT" />
       <Button fx:id="resetButton" mnemonicParsing="false" onAction="#reloadRoutesPage" text="reset" GridPane.halignment="RIGHT" />
-      <Button mnemonicParsing="false" text="Button" GridPane.halignment="CENTER" GridPane.rowIndex="3" GridPane.valignment="CENTER">
+      <Button fx:id="submitButton" mnemonicParsing="false" onAction="#onSwitchViewButtonClick" text="Button" GridPane.halignment="CENTER" GridPane.rowIndex="3" GridPane.valignment="CENTER">
          <GridPane.margin>
             <Insets />
          </GridPane.margin>

@@ -19,6 +19,7 @@ module com.project.busfinder {
     requires com.dlsc.gmapsfx;
     requires com.sothawo.mapjfx;
     requires com.google.gson;
+    requires java.management;
 
     opens com.project.busfinder to javafx.fxml;
     exports com.project.busfinder;

@@ -56,7 +56,7 @@ public class PolylineDecoder {
             lng += dlng;
 
             Coordinate coordinate = new Coordinate(lat / 1E5, lng / 1E5);
-            System.out.println("Decoded coordinate: " + coordinate);
+            //System.out.println("Decoded coordinate: " + coordinate);
             polyline.add(coordinate);
         }
         return polyline;

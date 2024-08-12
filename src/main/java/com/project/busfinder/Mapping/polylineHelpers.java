@@ -57,7 +57,7 @@ public class polylineHelpers {
             }
         }
 
-        System.out.printf("Closest segment for target %s is between indices %d and %d%n", target, closestIndex1, closestIndex2);
+        //System.out.printf("Closest segment for target %s is between indices %d and %d%n", target, closestIndex1, closestIndex2);
         return new int[]{closestIndex1, closestIndex2};
     }
 

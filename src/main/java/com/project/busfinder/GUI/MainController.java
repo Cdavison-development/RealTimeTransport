@@ -7,6 +7,7 @@ import com.gluonhq.maps.MapPoint;
 import com.project.busfinder.Mapping.*;
 import com.project.busfinder.util.CoordinateConverter;
 import com.project.busfinder.util.PolylineDecoder;
+import com.project.busfinder.util.ResourceMonitor;
 import com.sothawo.mapjfx.*;
 import com.sothawo.mapjfx.event.MapViewEvent;
 import javafx.animation.KeyFrame;
@@ -23,19 +24,24 @@ import javafx.util.Duration;
 import javafx.scene.layout.*;
 import java.io.IOException;
 import java.sql.SQLException;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.stream.Collectors;
 
 import com.sothawo.mapjfx.event.MarkerEvent;
 
-import static com.project.busfinder.Mapping.simulateBusLocations.findClosestDepartureTime;
-import static com.project.busfinder.Mapping.simulateBusLocations.getJourneyLegs;
-
+import static com.project.busfinder.Mapping.simulateBusLocations.*;
 
 
 //TODO: allow user to click on bus for live tracking and route details. same for searching from the side bar.
 // remove completed bus routes/ add new bus routes
 //
+// if the user wants to simulate a bus route, it may be better, and easier, to just re-render all objects
+// and simulate as if the time the simulated bus route begins is this current time.
 public class MainController {
     @FXML
     private VBox sidePanel;
@@ -56,7 +62,7 @@ public class MainController {
 
     private boolean isPanelOpen = false;
 
-    private BusIconController BusIconController;
+    private BusIconController busIconController;
     private RouteService routeService;
 
     private final String markerImagePath = "/com/project/busfinder/GUI/images/bus3.png";
@@ -70,82 +76,40 @@ public class MainController {
 
     @FXML
     public void initialize() throws IOException, InterruptedException {
-        // initialise the RouteService and BusSimulator
+
         routeService = new RouteService();
-        BusIconController = new BusIconController(mapView);
-        BusIconController.initializeMap();
+
+
 
 
         Configuration configuration = Configuration.builder()
                 .showZoomControls(true)
                 .build();
-
         mapView.initialize(configuration);
 
 
         mapView.initializedProperty().addListener((observable, oldValue, newValue) -> {
             if (newValue) {
+                busIconController = new BusIconController(mapView);
+                busIconController.initializeMap();
                 try {
-                    Platform.runLater(() -> {
-                        try {
-                            onMapInitialized();
-                        } catch (IOException | InterruptedException | SQLException e) {
-                            e.printStackTrace();
-                        }
-                    });
-                } catch (Exception e) {
-                    e.printStackTrace();
+                    LocalTime TestTime = LocalTime.of(8, 04);
+                    busIconController.mapActiveBuses(TestTime,5,null); // Initialize after the map is ready
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                } catch (SQLException e) {
+                    throw new RuntimeException(e);
                 }
+
             }
         });
+
 
         setupPanels();
     }
 
-
-
-    private void createBusMarkers() throws IOException, InterruptedException {
-        List<JourneyInfo> busInfos = findClosestDepartureTime();
-        BusIconController.createBusMarkers(busInfos);
-    }
-
-
-    private void onMapInitialized() throws IOException, InterruptedException, SQLException {
-
-        List<JourneyInfo> journeyInfos = simulateBusLocations.findClosestDepartureTime();
-
-        for (JourneyInfo journeyInfo : journeyInfos) {
-            String routeId = journeyInfo.getRoute();
-            String vehicleJourneyCode = journeyInfo.getVehicleJourneyCode();
-
-            try {
-
-                List<JourneyLeg> journeyLegs = getJourneyLegs(routeId, vehicleJourneyCode);
-                if (!journeyLegs.isEmpty()) {
-
-                    RouteData routeData = routeService.getRouteData(routeId);
-                    String polylineData = routeData.getPolylineData();
-
-                    System.out.println("Polyline Data Length: " + polylineData.length());
-                    System.out.println("Polyline Data: " + polylineData);
-
-                    List<Coordinate> routeCoordinates = PolylineDecoder.decodeAndConcatenatePolylinesFromString(polylineData);
-
-                    Platform.runLater(() -> {
-                        //BusIconController.plotIndividualPolylines(polylineData);
-                        //System.out.println("Polyline added to map view for route: " + routeId);
-                    });
-
-
-                    BusIconController.startBusMovement(journeyInfo, journeyLegs, routeCoordinates);
-                } else {
-                    Platform.runLater(() -> System.out.println("No journey legs found for Vehicle Journey Code: " + vehicleJourneyCode));
-                }
-            } catch (SQLException e) {
-                Platform.runLater(() -> e.printStackTrace());
-            }
-        }
-    }
 
     /**
      *
@@ -170,7 +134,9 @@ public class MainController {
 
     }
 
-
+    public BusIconController getBusIconController() {
+        return busIconController;
+    }
     public void loadSidePanel(String fxmlFile) {
         try {
             FXMLLoader loader = new FXMLLoader(getClass().getResource(fxmlFile));

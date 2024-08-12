@@ -48,7 +48,8 @@ public class readLiveLocation {
 
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
         if (response.statusCode() == 200) {
-            //processXmlResponse(response.body());
+            processXmlResponse(response.body());
+            //System.out.println(response.body());
             return response.body();
         } else {
             System.out.println("Failed to get a valid response. Status Code: " + response.statusCode());

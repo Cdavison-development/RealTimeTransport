@@ -15,7 +15,7 @@ public class RouteData {
     }
 
     public String getPolylineData() {
-        System.out.println(polylineData);
+       // System.out.println(polylineData);
         return polylineData;
     }
 
