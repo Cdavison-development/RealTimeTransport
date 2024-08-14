@@ -7,57 +7,28 @@ import java.util.List;
 public class polylineHelpers {
     private static final double TOLERANCE = 0.00001;
 
-    public static int findClosestCoordinateIndex(List<Coordinate> coordinates, Coordinate target) {
-        int closestIndex = -1;
-        double minDistance = Double.MAX_VALUE;
-
-        for (int i = 0; i < coordinates.size(); i++) {
-            Coordinate coord = coordinates.get(i);
-            double distance = haversineDistance(coord.getLatitude(), coord.getLongitude(), target.getLatitude(), target.getLongitude());
-            if (distance < minDistance) {
-                minDistance = distance;
-                closestIndex = i;
-            }
-        }
-
-        if (closestIndex == -1) {
-            System.out.println("No close coordinate found for target: " + target);
-        } else {
-            System.out.println("Closest index for target " + target + " is " + closestIndex + " with coordinate " + coordinates.get(closestIndex));
-        }
-
-        return closestIndex;
-    }
-
-    public static double haversineDistance(double lat1, double lon1, double lat2, double lon2) {
-        final int R = 6371; // Radius of the Earth in km
-        double latDistance = Math.toRadians(lat2 - lat1);
-        double lonDistance = Math.toRadians(lon2 - lon1);
-        double a = Math.sin(latDistance / 2) * Math.sin(latDistance / 2)
-                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
-                + Math.sin(lonDistance / 2) * Math.sin(lonDistance / 2);
-        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        return R * c * 1000;
-    }
 
     public static int[] findClosestSegmentIndices(List<Coordinate> coordinates, Coordinate target) {
         int closestIndex1 = -1;
         int closestIndex2 = -1;
         double minDistance = Double.MAX_VALUE;
 
+        // iterate through each pair of consecutive coordinates in the list
         for (int i = 0; i < coordinates.size() - 1; i++) {
             Coordinate coord1 = coordinates.get(i);
             Coordinate coord2 = coordinates.get(i + 1);
 
+            // calculate the distance from the target coordinate to the current segment
             double distance = pointToSegmentDistance(coord1, coord2, target);
             if (distance < minDistance) {
+                // update the minimum distance and the closest segment indices
                 minDistance = distance;
                 closestIndex1 = i;
                 closestIndex2 = i + 1;
             }
         }
 
-        //System.out.printf("Closest segment for target %s is between indices %d and %d%n", target, closestIndex1, closestIndex2);
+        // return the indices of the closest segment
         return new int[]{closestIndex1, closestIndex2};
     }
 
@@ -75,16 +46,20 @@ public class polylineHelpers {
         double t = ((x0 - x1) * dx + (y0 - y1) * dy) / d;
 
         if (t < 0) {
+            // if t is less than 0, the closest point on the segment is coord1
             dx = x0 - x1;
             dy = y0 - y1;
         } else if (t > 0) {
+            // if t is greater than 1, the closest point on the segment is coord2
             dx = x0 - x2;
             dy = y0 - y2;
         } else {
+            // if 0 <= t <= 1, the closest point lies on the segment between coord1 and coord2
             dx = x0 - (x1 + t * dx);
             dy = y0 - (y1 + t * dy);
         }
 
+        // return the Euclidean distance from the target to the closest point on the segment
         return Math.sqrt(dx * dx + dy * dy);
     }
 }

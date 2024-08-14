@@ -9,17 +9,16 @@ public class makeConnection {
     static Connection conn = null;
 
     public static Connection connect() {
-
         try {
-            // db parameters
+            // database connection URL
             String url = "jdbc:sqlite:data\\databases\\routes.db";
-            // create a connection to the database
+            // establish a connection to the SQLite database
             conn = DriverManager.getConnection(url);
 
             System.out.println("Connection to SQLite has been established.");
             return conn;
         } catch (SQLException e) {
-            System.out.println(e.getMessage());
+            System.out.println(e.getMessage()); // print the error message if connection fails
         }
         return conn;
     }

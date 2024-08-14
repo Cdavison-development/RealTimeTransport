@@ -63,31 +63,31 @@ public class TrackBusPanelController {
 
     @FXML
     private void initialize() {
+        // initialise the database connection
         initializeDatabaseConnection();
 
+        // populate the routes combo box with data
         populateRoutesComboBox();
 
-
+        // set an action listener for the routes combo box
         routesComboBox.setOnAction(event -> handleSelectionChange());
 
-
+        // set an action listener for the submit button
         submitButton.setOnAction(event -> {
             try {
-                onSwitchViewButtonClick();
+                onSwitchViewButtonClick(); // handle the button click action
             } catch (IOException | InterruptedException | SQLException e) {
-                e.printStackTrace();
+                e.printStackTrace(); // handle any exceptions that occur during the action
             }
         });
-
-
     }
 
     private void initializeDatabaseConnection() {
         try {
-
+            // establish a connection to the SQLite database
             conn = DriverManager.getConnection("jdbc:sqlite:data/databases/routes.db");
         } catch (SQLException e) {
-            e.printStackTrace();
+            e.printStackTrace(); // print the stack trace if an SQL exception occurs
         }
     }
 
@@ -149,23 +149,25 @@ public class TrackBusPanelController {
         if (selectedRoute != null) {
             departureTimeComboBox.setVisible(true);
 
-
+            // extract the route name from the selected route
             String routeName = extractRouteName(selectedRoute);
 
             try {
-
+                // create an instance of getRouteDetails to fetch route information
                 getRouteDetails fetcher = new getRouteDetails(conn);
 
+                // retrieve journey route information for the selected route
                 List<getRouteDetails.JourneyRouteInfo> routeInfoList = fetcher.getJourneyRouteInfo(routeName);
 
-
+                // clear the previous items in the departure time combo box
                 departureTimeComboBox.getItems().clear();
 
+                // if the selected route is a live route, add a "Track Live" option
                 if (selectedRoute.contains("Live")) {
                     departureTimeComboBox.getItems().add("Track Live");
                 }
 
-
+                // populate the combo box with the journey route information
                 for (getRouteDetails.JourneyRouteInfo info : routeInfoList) {
                     System.out.println(info);
 
@@ -174,30 +176,31 @@ public class TrackBusPanelController {
                     departureTimeComboBox.getItems().add(item);
                 }
 
+                // if the route information list is not empty, set the prompt text and select the first item
                 if (!routeInfoList.isEmpty()) {
                     departureTimeComboBox.setPromptText("Select Departure Time");
                     departureTimeComboBox.getSelectionModel().selectFirst();
                 }
 
-
+                // set an action listener for the departure time combo box
                 departureTimeComboBox.setOnAction(event -> {
                     String selectedItem = departureTimeComboBox.getValue();
                     System.out.println(selectedItem);
                     if (selectedItem != null) {
-
+                        // split the selected item to extract stop and time information
                         String[] parts = selectedItem.split(" at ");
 
                         if (parts.length == 2) {
                             String stopSection = parts[0].trim();
                             String timeAndJourneyCode = parts[1].trim();
 
-
+                            // further split to get departure time and vehicle journey code
                             String[] timeAndCodeParts = timeAndJourneyCode.split(" ");
                             if (timeAndCodeParts.length >= 2) {
                                 String departureTimeString = timeAndCodeParts[0].trim();
                                 String vehicleJourneyCode = timeAndCodeParts[1].replaceAll("[()]", "").trim();  // Remove brackets
 
-
+                                // parse the departure time
                                 LocalTime departureTime = null;
                                 try {
                                     departureTime = LocalTime.parse(departureTimeString, DateTimeFormatter.ofPattern("HH:mm"));
@@ -206,19 +209,18 @@ public class TrackBusPanelController {
                                     e.printStackTrace();
                                 }
 
-
+                                // split to get from and to stop information
                                 String[] stopParts = stopSection.split("->");
                                 if (stopParts.length == 2) {
                                     String fromStop = stopParts[0].trim();
                                     String toStop = stopParts[1].trim();
 
-
+                                    // output selected details
                                     System.out.println("Selected From Stop: " + fromStop);
                                     System.out.println("Selected To Stop: " + toStop);
                                     System.out.println("Selected Departure Time: " + departureTime);
                                     System.out.println("Selected Vehicle Journey Code: " + vehicleJourneyCode);
                                     System.out.println("Selected Route ID: " + routeName); // Route ID is the routeName
-
                                 }
                             }
                         }
@@ -230,6 +232,7 @@ public class TrackBusPanelController {
                 System.err.println("Failed to fetch route information.");
             }
         } else {
+            // show a warning alert if no route is selected
             Alert alert = new Alert(Alert.AlertType.WARNING);
             alert.setTitle("Selection Warning");
             alert.setHeaderText(null);
@@ -240,34 +243,34 @@ public class TrackBusPanelController {
 
     @FXML
     private void onSwitchViewButtonClick() throws IOException, InterruptedException, SQLException {
-
+        // check if the bus icon controller is initialised
         if (busIconController == null) {
             System.err.println("BusIconController is not initialized.");
             return;
         }
 
-
+        // retrieve the selected route and departure time from the combo boxes
         String selectedRoute = routesComboBox.getValue();
         String selectedValue = departureTimeComboBox.getValue();
 
+        // handle the case where "Track Live" is selected
         if (selectedValue.equals("Track Live")) {
-
             busIconController.mapLiveRoutesWithJourneyInfos(extractRouteName(selectedRoute));
         } else {
-
+            // parse the selected departure time and journey code
             String[] parts = selectedValue.split(" at ");
 
             if (parts.length == 2) {
                 String stopSection = parts[0].trim();
                 String timeAndJourneyCode = parts[1].trim();
 
-
+                // further split to extract departure time and vehicle journey code
                 String[] timeAndCodeParts = timeAndJourneyCode.split(" ");
                 if (timeAndCodeParts.length >= 2) {
                     String departureTimeString = timeAndCodeParts[0].trim();
-                    String vehicleJourneyCode = timeAndCodeParts[1].replaceAll("[()]", "").trim();  // Remove brackets
+                    String vehicleJourneyCode = timeAndCodeParts[1].replaceAll("[()]", "").trim();  // remove brackets
 
-
+                    // parse the departure time
                     LocalTime departureTime = null;
                     try {
                         departureTime = LocalTime.parse(departureTimeString, DateTimeFormatter.ofPattern("HH:mm"));
@@ -276,22 +279,22 @@ public class TrackBusPanelController {
                         e.printStackTrace();
                     }
 
-
+                    // extract the route name and stops
                     String routeName = extractRouteName(selectedRoute);
                     String[] stopParts = stopSection.split("->");
                     if (stopParts.length == 2) {
                         String fromStop = stopParts[0].trim();
                         String toStop = stopParts[1].trim();
 
-
+                        // output the selected details for debugging
                         System.out.println("Selected From Stop: " + fromStop);
                         System.out.println("Selected To Stop: " + toStop);
                         System.out.println("Selected Departure Time: " + departureTime);
                         System.out.println("Selected Vehicle Journey Code: " + vehicleJourneyCode);
-                        System.out.println("Selected Route ID: " + routeName); // Route ID is the routeName
+                        System.out.println("Selected Route ID: " + routeName);
 
-
-                        busIconController.mapActiveBuses(departureTime, 5,extractRouteName(selectedRoute));  // Adjust the parameters as needed
+                        // map active buses for the selected route and departure time
+                        busIconController.mapActiveBuses(departureTime, 5, extractRouteName(selectedRoute));
                     }
                 }
             }
@@ -299,11 +302,12 @@ public class TrackBusPanelController {
     }
     public void close() {
         try {
+            // close the database connection if it's open
             if (conn != null && !conn.isClosed()) {
                 conn.close();
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            e.printStackTrace(); // handle any exceptions that occur during closing
         }
     }
 

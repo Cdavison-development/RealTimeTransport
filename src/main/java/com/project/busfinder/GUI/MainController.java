@@ -76,72 +76,64 @@ public class MainController {
 
     @FXML
     public void initialize() throws IOException, InterruptedException {
-
+        // initialise the route service
         routeService = new RouteService();
 
-
-
-
+        // configure the map view with zoom controls enabled
         Configuration configuration = Configuration.builder()
                 .showZoomControls(true)
                 .build();
         mapView.initialize(configuration);
 
-
+        // add a listener to execute code once the map view is fully initialised
         mapView.initializedProperty().addListener((observable, oldValue, newValue) -> {
             if (newValue) {
+                // initialise the bus icon controller with the map view
                 busIconController = new BusIconController(mapView);
                 busIconController.initializeMap();
-                try {
-                    LocalTime TestTime = LocalTime.of(8, 04);
-                    busIconController.mapActiveBuses(TestTime,5,null); // Initialize after the map is ready
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                } catch (SQLException e) {
-                    throw new RuntimeException(e);
-                }
 
+                // map active buses after the map is ready
+                try {
+                    LocalTime testTime = LocalTime.of(8, 04);
+                    busIconController.mapActiveBuses(testTime, 5, null); // initialise after the map is ready
+                } catch (IOException | InterruptedException | SQLException e) {
+                    throw new RuntimeException(e); // handle exceptions by throwing a runtime exception
+                }
             }
         });
 
-
+        // set up any additional panels or UI components
         setupPanels();
     }
 
 
-    /**
-     *
-     * if the user changes the width of the panel , they run the risk of hiding the button and sidepanel
-     *
-     */
     private void setupPanels() {
-
-
+        // initially hide the side panel by translating it off-screen and setting it to invisible
         sidePanel.setTranslateX(-200);
         sidePanel.setVisible(false);
+
+        // position the button panel slightly offset from the hidden side panel
         buttonPanel.setTranslateX(sidePanel.getTranslateX() + 20);
 
-
+        // load the initial content for the side panel
         loadSidePanel("/com/project/busfinder/GUI/startingSidePanel.fxml");
 
-        // bind panel sizes
+        // bind the height of the panels to a percentage of the anchor pane's height
         sidePanel.prefHeightProperty().bind(anchorPane.heightProperty().multiply(0.8));
         buttonPanel.prefHeightProperty().bind(anchorPane.heightProperty().multiply(0.8));
         buttonPanelGridPane.prefHeightProperty().bind(anchorPane.heightProperty().multiply(0.8));
-
-
     }
 
     public BusIconController getBusIconController() {
         return busIconController;
     }
+
     public void loadSidePanel(String fxmlFile) {
         try {
             FXMLLoader loader = new FXMLLoader(getClass().getResource(fxmlFile));
             VBox newSidePanel = loader.load();
 
+            // set the main controller for the loaded side panel based on the FXML file
             if ("/com/project/busfinder/GUI/startingSidePanel.fxml".equals(fxmlFile)) {
                 SidePanelController sidePanelController = loader.getController();
                 sidePanelController.setMainController(this);
@@ -150,6 +142,7 @@ public class MainController {
                 trackBusPanelController.setMainController(this);
             }
 
+            // replace the existing content of the side panel with the new content
             sidePanel.getChildren().clear();
             sidePanel.getChildren().add(newSidePanel);
         } catch (IOException e) {
@@ -160,25 +153,31 @@ public class MainController {
 
     @FXML
     private void toggleSidePanel(ActionEvent event) {
-        final double gap = 10;
-        double endX = gap;
-        double startX = -200;
+        final double gap = 10;  // defines the gap between the side panel and the button panel
+        double endX = gap;  // target position when the panel is opened
+        double startX = -200;  // initial off-screen position when the panel is closed
 
+        // create transitions for both the side panel and the button panel
         TranslateTransition transition = new TranslateTransition(Duration.seconds(0.3), sidePanel);
         TranslateTransition buttonTransition = new TranslateTransition(Duration.seconds(0.3), buttonPanel);
 
+        // check if the panel is currently open or closed
         if (isPanelOpen) {
-
+            // move the side panel off-screen and adjust the button panel accordingly
             transition.setToX(startX);
             buttonTransition.setToX(startX + 20);
         } else {
+            // move the side panel on-screen and adjust the button panel accordingly
             sidePanel.setVisible(true);
             transition.setToX(endX);
             buttonTransition.setToX(endX + gap);
         }
 
+        // play the transitions
         transition.play();
         buttonTransition.play();
+
+        // toggle the panel's open/closed state
         isPanelOpen = !isPanelOpen;
     }
 

@@ -27,6 +27,7 @@ public class SidePanelController {
 
     @FXML
     public void moveToRoutesPage(ActionEvent event){
+        // loads side panel content
         if (mainController != null) {
             mainController.loadSidePanel("/com/project/busfinder/GUI/trackBusPanel.fxml");
         }

@@ -22,19 +22,25 @@ public class StopService {
         }
 
     public Map<String, Coordinate> getStopCoordinates(List<String> stopIds) {
+        // map to store stop IDs and their corresponding coordinates
         Map<String, Coordinate> stopCoordinates = new HashMap<>();
+
+        // build the SQL query with placeholders for the stop IDs
         String sql = "SELECT stop_id, longitude, latitude FROM bus_stops WHERE stop_id IN (" +
                 String.join(",", stopIds.stream().map(id -> "?").toArray(String[]::new)) + ")";
 
         try (Connection conn = this.connect();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
+            // set the stop ID parameters in the SQL query
             for (int i = 0; i < stopIds.size(); i++) {
                 pstmt.setString(i + 1, stopIds.get(i));
             }
 
+            // execute the query and retrieve the result set
             ResultSet rs = pstmt.executeQuery();
 
+            // iterate through the result set and populate the map with stop IDs and coordinates
             while (rs.next()) {
                 String stopId = rs.getString("stop_id");
                 double longitude = rs.getDouble("longitude");
@@ -42,9 +48,10 @@ public class StopService {
                 stopCoordinates.put(stopId, new Coordinate(latitude, longitude));
             }
         } catch (SQLException e) {
-            System.out.println(e.getMessage());
+            System.out.println(e.getMessage()); // print any SQL exception messages
         }
-        return stopCoordinates;
+
+        return stopCoordinates; // return the map of stop coordinates
     }
-    }
+}
 
