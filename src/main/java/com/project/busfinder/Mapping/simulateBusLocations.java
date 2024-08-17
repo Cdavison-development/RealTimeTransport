@@ -5,6 +5,8 @@ import com.project.busfinder.util.readLiveLocation;
 
 import java.io.IOException;
 import java.sql.*;
+import java.time.DayOfWeek;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.AbstractMap;
@@ -26,7 +28,7 @@ import static com.project.busfinder.util.readLiveLocation.fetchAndProcessRespons
  *
  * if buses are showing signs of being late, switch to live tracking.
  *
- *
+ * if the slected day allows live tracking, switch to live tracking on day selection
  *
  *
  */
@@ -41,15 +43,15 @@ public class simulateBusLocations {
         String routeId = "345";
         String vehicleJourneyCode = "VJ_29";
         LocalTime startTime = LocalTime.of(8, 0);
-        findActiveBusesInTimeFrame(startTime,0);
+       // findActiveBusesInTimeFrame(startTime,0);
         findClosestDepartureTime();
-        List<JourneyLeg> journeyLegs = getJourneyLegs("55", "VJ_4");
+        //List<JourneyLeg> journeyLegs = getJourneyLegs("55", "VJ_4");
 
 
-        System.out.println("Journey Legs:");
-        for (JourneyLeg leg : journeyLegs) {
-            System.out.println(leg);
-        }
+       // System.out.println("Journey Legs:");
+        //for (JourneyLeg leg : journeyLegs) {
+            //System.out.println(leg);
+       // }
     }
 
     private static void initializeDatabaseConnection() {
@@ -76,6 +78,23 @@ public class simulateBusLocations {
         int wrongCounter = 0;
         int rightCounter = 0;
 
+        // determine the current day of the week
+        DayOfWeek currentDay = LocalDate.now().getDayOfWeek();
+        String tableName;
+
+        // determine which table to query based on the current day
+        switch (currentDay) {
+            case SATURDAY:
+                tableName = "saturday_routes";
+                break;
+            case SUNDAY:
+                tableName = "sunday_routes";
+                break;
+            default:
+                tableName = "weekday_routes";
+                break;
+        }
+
         // iterate through each route and pattern pair
         for (AbstractMap.SimpleEntry<String, String> entry : routes) {
             String route = entry.getKey();
@@ -97,12 +116,12 @@ public class simulateBusLocations {
 
                 // if a vehicle journey code is found, query the database for journey details
                 if (vehicleJourneyCode != null) {
-                    String query2 = """
+                    String query2 = String.format("""
                 SELECT jr.departure_time, jr.from_stop, jr.to_stop, bs.longitude, bs.latitude
-                FROM journeyRoutes jr
+                FROM %s jr
                 JOIN bus_stops bs ON jr.from_stop = bs.stop_id
                 WHERE jr.route_id = ? AND jr.Vehicle_journey_code = ?
-                """;
+                """, tableName);
 
                     try (PreparedStatement pstmt2 = conn.prepareStatement(query2)) {
                         pstmt2.setString(1, route);
@@ -212,17 +231,28 @@ public class simulateBusLocations {
         return pattern; // return the original pattern if no modification is needed
     }
 
-    public static List<JourneyLeg> getJourneyLegs(String routeId, String vehicleJourneyCode) throws SQLException {
+    public static List<JourneyLeg> getJourneyLegs(String routeId, String vehicleJourneyCode,String day) throws SQLException {
         List<JourneyLeg> journeyLegs = new ArrayList<>();
-
+        String tableName;
+        switch (day) {
+            case "Saturday":
+                tableName = "saturday_routes";
+                break;
+            case "Sunday":
+                tableName = "sunday_routes";
+                break;
+            default:
+                tableName = "weekday_routes";
+                break;
+        }
         // SQL query to fetch journey legs with associated bus stop coordinates
-        String query = """
+        String query = String.format("""
         SELECT jr.departure_time, jr.from_stop, jr.to_stop, bs.longitude, bs.latitude
-        FROM journeyRoutes jr
+        FROM %s jr
         JOIN bus_stops bs ON jr.from_stop = bs.stop_id
         WHERE jr.route_id = ? AND jr.Vehicle_journey_code = ?
         ORDER BY jr.departure_time
-    """;
+    """, tableName);
 
         try (PreparedStatement pstmt = conn.prepareStatement(query)) {
             // set the route ID and vehicle journey code parameters in the query
@@ -251,19 +281,33 @@ public class simulateBusLocations {
     }
 
     //unsure how it will handle two routes at the same time, example route: 10,Vehicle Journey Code: VJ_62, Departure Time: 08:00, From Stop: 2800S14018B, To Stop: 2800S14019A, Longitude: -2.776328, Latitude: 53.437650, route: 10,Vehicle Journey Code: VJ_63, Departure Time: 08:00, From Stop: 2800S44020B, To Stop: 2800S51011B, Longitude: -2.834953, Latitude: 53.423403,
-    public static List<JourneyInfo> findActiveBusesInTimeFrame(LocalTime targetTime, int timeWindowMinutes) throws SQLException {
+    public static List<JourneyInfo> findActiveBusesInTimeFrame(LocalTime targetTime, int timeWindowMinutes, String day) throws SQLException {
         initializeDatabaseConnection();
 
         List<JourneyInfo> journeyInfoList = new ArrayList<>();
 
+        String tableName;
+        switch (day) {
+            case "Saturday":
+                tableName = "saturday_routes";
+                break;
+            case "Sunday":
+                tableName = "sunday_routes";
+                break;
+            default:
+                tableName = "weekday_routes";
+                break;
+        }
+
         // SQL query to fetch active buses within a specified time frame
-        String query = """
+        String query = String.format("""
         SELECT route_id, Vehicle_journey_code, departure_time, from_stop, to_stop, bs.longitude, bs.latitude
-        FROM journeyRoutes jr
+        FROM %s jr
         JOIN bus_stops bs ON jr.from_stop = bs.stop_id
-        WHERE jr.departure_time BETWEEN ? AND ?
+        WHERE (jr.departure_time BETWEEN ? AND ?)
+        OR (jr.departure_time >= ? AND jr.departure_time < '00:00:00')
         ORDER BY jr.departure_time
-    """;
+    """, tableName);
 
         try (PreparedStatement pstmt = conn.prepareStatement(query)) {
             // calculate the start and end times based on the target time and window
@@ -273,6 +317,13 @@ public class simulateBusLocations {
             // set the time frame parameters in the query
             pstmt.setString(1, startTime.format(DateTimeFormatter.ofPattern("HH:mm:ss")));
             pstmt.setString(2, endTime.format(DateTimeFormatter.ofPattern("HH:mm:ss")));
+
+
+            if (endTime.isBefore(startTime)) {
+                pstmt.setString(3, startTime.format(DateTimeFormatter.ofPattern("HH:mm:ss")));
+            } else {
+                pstmt.setString(3, "00:00:00");
+            }
 
             ResultSet rs = pstmt.executeQuery();
 
@@ -302,10 +353,10 @@ public class simulateBusLocations {
                 journeyInfoList.add(journeyInfo);
             }
         } catch (SQLException e) {
-            e.printStackTrace(); // print the exception stack trace if an error occurs
+            e.printStackTrace();
         }
 
-        return journeyInfoList; // return the list of active buses within the time frame
+        return journeyInfoList;
     }
 }
 

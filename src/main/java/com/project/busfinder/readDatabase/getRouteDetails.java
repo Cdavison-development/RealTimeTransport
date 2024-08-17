@@ -20,7 +20,7 @@ public class getRouteDetails {
     public static void main(String[] args) {
         try (Connection conn = DriverManager.getConnection("jdbc:sqlite:data/databases/routes.db")) {
             getRouteDetails fetcher = new getRouteDetails(conn);
-            List<getRouteDetails.JourneyRouteInfo> journeyInfoList = fetcher.getJourneyRouteInfo("10A");
+            List<getRouteDetails.JourneyRouteInfo> journeyInfoList = fetcher.getJourneyRouteInfo("10A","Saturday");
 
             for (getRouteDetails.JourneyRouteInfo info : journeyInfoList) {
                 System.out.println(info);
@@ -30,8 +30,22 @@ public class getRouteDetails {
         }
     }
 
-    public List<JourneyRouteInfo> getJourneyRouteInfo(String routeId) throws SQLException {
-        // SQL query to retrieve journey route information, including first and last stops and their times
+    public List<JourneyRouteInfo> getJourneyRouteInfo(String routeId, String day) throws SQLException {
+        // determine table based on day parameter
+        String tableName;
+        switch (day) {
+            case "Saturday":
+                tableName = "saturday_routes";
+                break;
+            case "Sunday":
+                tableName = "sunday_routes";
+                break;
+            default:
+                tableName = "weekday_routes";
+                break;
+        }
+
+        // retrieve journey route information, including first and last stops and their times
         String query = """
     WITH FirstStop AS (
         SELECT 
@@ -40,7 +54,7 @@ public class getRouteDetails {
             from_stop AS first_from_stop,
             MIN(departure_time) AS earliest_departure_time
         FROM 
-            journeyRoutes
+            """ + tableName + """
         WHERE 
             route_id = ?
         GROUP BY 
@@ -54,7 +68,7 @@ public class getRouteDetails {
             to_stop AS last_to_stop,
             MAX(departure_time) AS latest_departure_time
         FROM 
-            journeyRoutes
+            """ + tableName + """
         WHERE 
             route_id = ?
         GROUP BY 
@@ -88,7 +102,6 @@ public class getRouteDetails {
             ResultSet rs = pstmt.executeQuery();
 
             List<JourneyRouteInfo> results = new ArrayList<>();
-
             // process the result set and create JourneyRouteInfo objects
             while (rs.next()) {
                 String journeyPatternRef = rs.getString("journey_pattern_ref");
@@ -101,12 +114,43 @@ public class getRouteDetails {
                 // retrieve and parse the earliest departure time and latest arrival time
                 String departureTimeString = rs.getString("earliest_departure_time");
                 String arrivalTimeString = rs.getString("latest_departure_time");
+
+                System.out.println("Raw Departure Time: " + departureTimeString);
+                System.out.println("Raw Arrival Time: " + arrivalTimeString);
+
                 LocalTime earliestDepartureTime = LocalTime.parse(departureTimeString);
                 LocalTime latestArrivalTime = LocalTime.parse(arrivalTimeString);
 
-                // check if the route is circular (first and last stop names are the same)
-                boolean isCircular = firstFromStopName.equals(lastToStopName);
-                System.out.println(firstFromStopName + " " + lastToStopName);
+                // determine whether the journey crosses midnight
+                boolean crossesMidnight = earliestDepartureTime.isAfter(latestArrivalTime);
+
+
+                if (crossesMidnight) {
+                    System.out.println("Journey crosses midnight. Adjusting times.");
+
+                    // adjust earliest tim,e
+                    earliestDepartureTime = earliestDepartureTime.minusHours(24);
+
+                    // ensure earliest time is before latest time
+                    if (earliestDepartureTime.isAfter(latestArrivalTime)) {
+                        System.out.println("Adjusting latest arrival time to reflect the next day.");
+                        latestArrivalTime = latestArrivalTime.plusHours(24);
+                    }
+                }
+
+                System.out.println("Adjusted Earliest Departure Time: " + earliestDepartureTime);
+                System.out.println("Adjusted Latest Arrival Time: " + latestArrivalTime);
+
+
+                System.out.println("Adjusted Earliest Departure Time: " + earliestDepartureTime);
+                System.out.println("Adjusted Latest Arrival Time: " + latestArrivalTime);
+
+
+                if (latestArrivalTime.isBefore(LocalTime.of(1, 0))) {
+                    System.out.println("Adjusting latest arrival time to keep within context of previous day.");
+                    latestArrivalTime = latestArrivalTime.plusHours(24);
+                }
+
 
                 // create a new JourneyRouteInfo object and add it to the results list
                 JourneyRouteInfo info = new JourneyRouteInfo(
@@ -117,16 +161,15 @@ public class getRouteDetails {
                         lastToStop,
                         lastToStopName,
                         earliestDepartureTime,
-                        latestArrivalTime,
-                        isCircular
+                        latestArrivalTime
                 );
                 results.add(info);
             }
 
-            // sort the results by the earliest departure time
+            // sort results
             results.sort(Comparator.comparing(JourneyRouteInfo::getEarliestDepartureTime));
 
-            return results; // return the sorted list of JourneyRouteInfo objects
+            return results;
         }
     }
 
@@ -139,12 +182,16 @@ public class getRouteDetails {
         private final String lastToStopName;
         private final LocalTime earliestDepartureTime;
         private final LocalTime latestArrivalTime;
-        private final boolean isCircular;
+        //private final boolean isCircular;
 
         // constructor to initialise all fields
+        //public JourneyRouteInfo(String journeyPatternRef, String vehicleJourneyCode, String firstFromStop,
+                                //String firstFromStopName, String lastToStop, String lastToStopName,
+                                //LocalTime earliestDepartureTime, LocalTime latestArrivalTime, boolean isCircular) {
+
         public JourneyRouteInfo(String journeyPatternRef, String vehicleJourneyCode, String firstFromStop,
                                 String firstFromStopName, String lastToStop, String lastToStopName,
-                                LocalTime earliestDepartureTime, LocalTime latestArrivalTime, boolean isCircular) {
+                                LocalTime earliestDepartureTime, LocalTime latestArrivalTime) {
             this.journeyPatternRef = journeyPatternRef;
             this.vehicleJourneyCode = vehicleJourneyCode;
             this.firstFromStop = firstFromStop;
@@ -153,7 +200,7 @@ public class getRouteDetails {
             this.lastToStopName = lastToStopName;
             this.earliestDepartureTime = earliestDepartureTime;
             this.latestArrivalTime = latestArrivalTime;
-            this.isCircular = isCircular;
+            //this.isCircular = isCircular;
         }
 
         // getter for journey pattern reference
@@ -196,15 +243,12 @@ public class getRouteDetails {
             return latestArrivalTime;
         }
 
-        // method to check if the route is circular
-        public boolean isCircular() {
-            return isCircular;
-        }
 
-        // override toString method to provide a formatted string representation of the object
+
         @Override
         public String toString() {
-            String routeDescription = isCircular ? "Circular Route: " : "Route: ";
+            //String routeDescription = isCircular ? "Circular Route: " : "Route: ";
+            String routeDescription = "Route: ";
             return String.format("%sJourneyPatternRef: %s, VehicleJourneyCode: %s, %s (%s) -> %s (%s), Departure: %s, Arrival: %s",
                     routeDescription, journeyPatternRef, vehicleJourneyCode,
                     firstFromStopName, firstFromStop, lastToStopName, lastToStop,

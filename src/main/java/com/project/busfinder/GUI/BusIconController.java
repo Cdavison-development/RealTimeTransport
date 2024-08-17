@@ -16,6 +16,8 @@ import javafx.util.Duration;
 
 import java.io.IOException;
 import java.sql.SQLException;
+import java.time.DayOfWeek;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
@@ -85,7 +87,7 @@ public class BusIconController {
         mapView.initializedProperty().addListener((observable, oldValue, newValue) -> {
             if (newValue) {
                 System.out.println("MapView initialised.");
-                // additional setup can be done here
+
             }
         });
     }
@@ -130,6 +132,17 @@ public class BusIconController {
             busMarkers.clear();
         }
 
+        // check if there are any polylines to clear
+        if (allPolylines.isEmpty()) {
+            System.out.println("No polylines to remove.");
+        } else {
+            System.out.println("Removing " + allPolylines.size() + " polylines.");
+            for (CoordinateLine polyline : allPolylines) {
+                Platform.runLater(() -> mapView.removeCoordinateLine(polyline));
+            }
+            allPolylines.clear();
+        }
+
         System.out.println("Map view cleared.");
     }
 
@@ -143,14 +156,14 @@ public class BusIconController {
     }
 
     public void plotIndividualPolylines(String polylineData, String selectedRoute) {
-        // Decode the polyline data into individual lists of coordinates
+        // decode polyline data
         List<List<Coordinate>> allPolylinesCoordinates = decodePolylinesIndividually(polylineData);
 
-        // Iterate through each list of coordinates to create and plot polylines
+        // iterate through each list of coordinates
         for (List<Coordinate> polyline : allPolylinesCoordinates) {
             CoordinateLine coordinateLine = createCoordinateLine(polyline);
 
-            // Check if the selected route matches, then plot the polyline on the map
+            //check if the selected route matches, plot
             if (selectedRoute.equals(selectedRoute)) {
                 allPolylines.add(coordinateLine);
                 Platform.runLater(() -> mapView.addCoordinateLine(coordinateLine));
@@ -162,7 +175,7 @@ public class BusIconController {
     public void mapLiveRoutesWithJourneyInfos(String selectedRoute) throws IOException, InterruptedException, SQLException {
         // clear the map view of any existing markers and polylines
         clearMapView();
-
+        DayOfWeek currentDay = LocalDate.now().getDayOfWeek();
         // check if this is the first time the method is being called
         if (isFirstCall) {
             System.out.println("First call - not using selected polyline.");
@@ -202,7 +215,7 @@ public class BusIconController {
 
             try {
                 // retrieve journey legs for the given route and vehicle journey code
-                List<JourneyLeg> journeyLegs = getJourneyLegs(routeId, vehicleJourneyCode);
+                List<JourneyLeg> journeyLegs = getJourneyLegs(routeId, vehicleJourneyCode, String.valueOf(currentDay));
                 if (!journeyLegs.isEmpty()) {
                     // retrieve route data for the given route ID
                     RouteData routeData = routeService.getRouteData(routeId);
@@ -221,6 +234,7 @@ public class BusIconController {
 
                     // decode the polyline data into coordinates and start bus movement on the map
                     List<Coordinate> routeCoordinates = PolylineDecoder.decodeAndConcatenatePolylinesFromString(polylineData);
+                    clearRenderingState();
                     startBusMovement(journeyInfo, journeyLegs, routeCoordinates, LocalTime.now());
 
                     System.out.println("Resource usage after starting bus movement:");
@@ -236,7 +250,7 @@ public class BusIconController {
         }
     }
 
-    public void mapActiveBuses(LocalTime testTime, int timeWindowMinutes, String selectedRoute) throws SQLException, IOException, InterruptedException {
+    public void mapActiveBuses(String Day,LocalTime testTime, int timeWindowMinutes, String selectedRoute) throws SQLException, IOException, InterruptedException {
 
         // clear the map view of any existing markers and polylines
         clearMapView();
@@ -244,7 +258,7 @@ public class BusIconController {
         List<Coordinate> coordinatesForRoute = new ArrayList<>();
 
         // find active buses within the specified time window
-        List<JourneyInfo> activeBuses = findActiveBusesInTimeFrame(testTime, timeWindowMinutes);
+        List<JourneyInfo> activeBuses = findActiveBusesInTimeFrame(testTime, timeWindowMinutes,Day);
         for (JourneyInfo journeyInfo : activeBuses) {
             if (selectedRoute == null || journeyInfo.getRoute().equals(selectedRoute)) {
                 double longitude = journeyInfo.getLongitude();
@@ -314,7 +328,7 @@ public class BusIconController {
 
             try {
                 // fetch journey legs for the current route and vehicle journey code
-                List<JourneyLeg> journeyLegs = getJourneyLegs(routeId, vehicleJourneyCode);
+                List<JourneyLeg> journeyLegs = getJourneyLegs(routeId, vehicleJourneyCode,Day);
                 if (!journeyLegs.isEmpty()) {
                     RouteData routeData = routeService.getRouteData(routeId);
                     if (routeData == null) {
@@ -331,7 +345,7 @@ public class BusIconController {
                     // decode the polyline data into coordinates
                     List<Coordinate> routeCoordinates = PolylineDecoder.decodeAndConcatenatePolylinesFromString(polylineData);
 
-
+                    clearRenderingState();
                     // start bus movement along the decoded route
                     startBusMovement(journeyInfo, journeyLegs, routeCoordinates, testTime);
 
@@ -432,6 +446,10 @@ public class BusIconController {
         } else {
             System.out.println("No bus movement started due to duplicate marker.");
         }
+    }
+
+    public void clearRenderingState() {
+        uniqueCoordinates.clear();
     }
 /**
     public void compareMarkers() {

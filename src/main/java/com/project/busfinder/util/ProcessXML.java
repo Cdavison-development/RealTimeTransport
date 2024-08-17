@@ -114,7 +114,7 @@ public class ProcessXML {
                         NodeList sectionList = doc.getElementsByTagName("JourneyPatternSection");
 
                         // insert the journey code and other relevant information into the database
-                        String JourneyCodeSQL = "INSERT INTO journeyCodes_test (journey_code, route_id, journey_pattern_ref, Vehicle_journey_code, days_of_week) VALUES (?, ?, ?, ?, ?)";
+                        String JourneyCodeSQL = "INSERT INTO journeyCode (journey_code, route_id, journey_pattern_ref, Vehicle_journey_code, days_of_week) VALUES (?, ?, ?, ?, ?)";
                         try (PreparedStatement pstmt = conn.prepareStatement(JourneyCodeSQL)) {
                             pstmt.setString(1, journeyCode);
                             pstmt.setString(2, routeId);
@@ -141,16 +141,20 @@ public class ProcessXML {
                                         java.time.Duration duration = java.time.Duration.parse(runTime);
                                         LocalTime newDepartureTime = departureTime.plus(duration);
 
-                                        JourneyLegDeparture journeyLeg = new JourneyLegDeparture(fromStop, toStop, javafx.util.Duration.millis(duration.toMillis()), newDepartureTime);
+                                        // determine the date based on the day of the week
+                                        for (String day : daysOfWeek) {
+                                            LocalDate date = determineDateForDay(day,newDepartureTime);
+                                            JourneyLegDeparture journeyLeg = new JourneyLegDeparture(fromStop, toStop, javafx.util.Duration.millis(duration.toMillis()), newDepartureTime, date);
 
-                                        if (!sameMinuteLegs.isEmpty() && !newDepartureTime.truncatedTo(ChronoUnit.MINUTES).equals(sameMinuteLegs.get(0).getDepartureTime().truncatedTo(ChronoUnit.MINUTES))) {
-                                            distributeTimeWithinSameMinute(sameMinuteLegs);
-                                            insertJourneyLegsIntoDB(sameMinuteLegs, routeId, journeyPatternRef, vehicleJourneyRef, daysOfWeek, conn);
-                                            sameMinuteLegs.clear();
+                                            if (!sameMinuteLegs.isEmpty() && !newDepartureTime.truncatedTo(ChronoUnit.MINUTES).equals(sameMinuteLegs.get(0).getDepartureTime().truncatedTo(ChronoUnit.MINUTES))) {
+                                                distributeTimeWithinSameMinute(sameMinuteLegs);
+                                                insertJourneyLegsIntoDB(sameMinuteLegs, routeId, journeyPatternRef, vehicleJourneyRef, daysOfWeek, conn);
+                                                sameMinuteLegs.clear();
+                                            }
+
+                                            sameMinuteLegs.add(journeyLeg);
+                                            departureTime = newDepartureTime;
                                         }
-
-                                        sameMinuteLegs.add(journeyLeg);
-                                        departureTime = newDepartureTime;
                                     } else {
                                         System.out.println("JourneyCode: " + journeyCode);
                                         System.out.println("RouteId: " + routeId);
@@ -172,11 +176,44 @@ public class ProcessXML {
         }
     }
 
+    private static LocalDate determineDateForDay(String day, LocalTime time) {
+        LocalDate baseDate;
+        switch (day) {
+            case "Monday":
+                baseDate = LocalDate.of(2024, 8, 12);
+                break;
+            case "Tuesday":
+                baseDate = LocalDate.of(2024, 8, 13);
+                break;
+            case "Wednesday":
+                baseDate = LocalDate.of(2024, 8, 14);
+                break;
+            case "Thursday":
+                baseDate = LocalDate.of(2024, 8, 15);
+                break;
+            case "Friday":
+                baseDate = LocalDate.of(2024, 8, 16);
+                break;
+            case "Saturday":
+                baseDate = LocalDate.of(2024, 8, 17);
+                break;
+            case "Sunday":
+                baseDate = LocalDate.of(2024, 8, 18);
+                break;
+            default:
+                throw new IllegalArgumentException("Invalid day of the week: " + day);
+        }
 
+        // adjust date if the time is before 3AM, consider this time part of the previous day
+        if (time.isBefore(LocalTime.of(3, 0))) {
+            baseDate = baseDate.minusDays(1);
+        }
+
+        return baseDate;
+    }
     private static String getNestedTextContent(Element parent, String tagName) {
         // retrieve the list of nodes with the specified tag name
         NodeList nodeList = parent.getElementsByTagName(tagName);
-        // check if the node list contains any elements
         if (nodeList.getLength() > 0) {
             // get the first node in the list
             Node node = nodeList.item(0);
@@ -349,7 +386,7 @@ public class ProcessXML {
     }
 
     private static String determineTableForDays(List<String> daysOfWeek) {
-        // return the appropriate database table name based on the days of the week
+
         if (daysOfWeek.contains("Saturday") && daysOfWeek.size() == 1) {
             return "saturday_routes";
         } else if (daysOfWeek.contains("Sunday") && daysOfWeek.size() == 1) {
@@ -362,7 +399,7 @@ public class ProcessXML {
     private static void insertLegsIntoDatabase(List<JourneyLegDeparture> legs, String routeId, String journeyPatternRef, String vehicleJourneyRef, List<String> daysOfWeek, Connection conn, String tableName) {
         // iterate through each leg and insert its data into the specified table
         for (JourneyLegDeparture leg : legs) {
-            String insertSQL = "INSERT INTO " + tableName + " (route_id, journey_pattern_ref, Vehicle_journey_code, from_stop, to_stop, days_of_week, departure_time) VALUES (?, ?, ?, ?, ?, ?, ?)";
+            String insertSQL = "INSERT INTO " + tableName +"(route_id, journey_pattern_ref, Vehicle_journey_code, from_stop, to_stop, days_of_week, departure_time,date) VALUES (?, ?, ?, ?, ?, ?, ?,?)";
             try (PreparedStatement pstmt = conn.prepareStatement(insertSQL)) {
                 pstmt.setString(1, routeId);
                 pstmt.setString(2, journeyPatternRef);
@@ -371,6 +408,7 @@ public class ProcessXML {
                 pstmt.setString(5, leg.getToStop());
                 pstmt.setString(6, String.join(",", daysOfWeek));
                 pstmt.setString(7, leg.getDepartureTime().format(DateTimeFormatter.ofPattern("HH:mm:ss")));
+                pstmt.setDate(8, Date.valueOf(leg.getDate()));
                 pstmt.executeUpdate();
                 System.out.println("Inserted successfully.");
             } catch (SQLException e) {
@@ -386,33 +424,34 @@ public class ProcessXML {
         private final String toStop;
         private final javafx.util.Duration runTime;
         private LocalTime departureTime;
+        private final LocalDate date;
 
-        // constructor to initialise the journey leg with from stop, to stop, runtime, and departure time
-        public JourneyLegDeparture(String fromStop, String toStop, javafx.util.Duration runTime, LocalTime departureTime) {
+        public JourneyLegDeparture(String fromStop, String toStop, javafx.util.Duration runTime, LocalTime departureTime, LocalDate date) {
             this.fromStop = fromStop;
             this.toStop = toStop;
             this.runTime = runTime;
             this.departureTime = departureTime;
+            this.date = date;
         }
 
-        // getter for the from stop
         public String getFromStop() {
             return fromStop;
         }
 
-        // getter for the to stop
         public String getToStop() {
             return toStop;
         }
 
-        // getter for the departure time
         public LocalTime getDepartureTime() {
             return departureTime;
         }
 
-        // setter for the departure time
         public void setDepartureTime(LocalTime departureTime) {
             this.departureTime = departureTime;
+        }
+
+        public LocalDate getDate() {
+            return date;
         }
     }
 }

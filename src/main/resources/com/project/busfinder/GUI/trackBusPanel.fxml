@@ -19,13 +19,14 @@
    <children>
       <Button fx:id="returnButton" mnemonicParsing="false" onAction="#moveToStartingPage" text="&lt;-" GridPane.halignment="LEFT" />
       <Button fx:id="resetButton" mnemonicParsing="false" onAction="#reloadRoutesPage" text="reset" GridPane.halignment="RIGHT" />
-      <Button fx:id="submitButton" mnemonicParsing="false" onAction="#onSwitchViewButtonClick" text="Button" GridPane.halignment="CENTER" GridPane.rowIndex="3" GridPane.valignment="CENTER">
+      <Button fx:id="submitButton" mnemonicParsing="false" onAction="#onSwitchViewButtonClick" text="Button" GridPane.halignment="CENTER" GridPane.rowIndex="4" GridPane.valignment="CENTER">
          <GridPane.margin>
             <Insets />
          </GridPane.margin>
       </Button>
-      <ComboBox fx:id="routesComboBox" prefHeight="44.0" prefWidth="190.0" promptText="Enter bus service" GridPane.rowIndex="1" />
-         <ComboBox fx:id="departureTimeComboBox" prefHeight="25.0" prefWidth="197.0" promptText="Choose departure Time" visible="false" GridPane.rowIndex="2" />
+      <ComboBox fx:id="routesComboBox" prefHeight="44.0" prefWidth="190.0" promptText="Enter bus service" visible="false" GridPane.rowIndex="2" />
+         <ComboBox fx:id="departureTimeComboBox" prefHeight="25.0" prefWidth="197.0" promptText="Choose departure Time" visible="false" GridPane.rowIndex="3" />
+         <ComboBox fx:id="dayComboBox" prefHeight="37.0" prefWidth="190.0" promptText="Enter day:" GridPane.rowIndex="1" />
    </children>
 </GridPane>
 </VBox>
