@@ -10,17 +10,26 @@ import com.sothawo.mapjfx.event.MarkerEvent;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.application.Platform;
+import javafx.fxml.FXML;
 import javafx.geometry.Point2D;
+import javafx.scene.Cursor;
+import javafx.scene.control.ProgressIndicator;
+import javafx.scene.input.MouseEvent;
 import javafx.scene.paint.Color;
-import javafx.util.Duration;
-
+//import javafx.util.Duration;
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.util.List;
 import java.io.IOException;
 import java.sql.SQLException;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static com.project.busfinder.Mapping.polylineHelpers.findClosestSegmentIndices;
 import static com.project.busfinder.Mapping.simulateBusLocations.findActiveBusesInTimeFrame;
@@ -31,9 +40,15 @@ import static com.project.busfinder.util.PolylineDecoder.decodePolylinesIndividu
 // next step, return data on click
 public class BusIconController {
 
+
+    @FXML
+    private ProgressIndicator loadingIndicator;
     private MapView mapView;
 
-
+    private boolean isMapLocked = true;
+    private Marker currentLockedMarker;
+    private Timeline lockTimeline = null;
+    private Map<String, JourneyInfo> closestBuses = new HashMap<>();
     private final StopService stopService;
     private final String markerImagePath = "/com/project/busfinder/GUI/images/bus3.png";
     private final List<Marker> busMarkers = new ArrayList<>();
@@ -43,14 +58,16 @@ public class BusIconController {
     private List<CoordinateLine> renderedPolylines = new ArrayList<>();
     private List<CoordinateLine> allPolylines = new ArrayList<>();
     private boolean isFirstCall = true;
+    private boolean useFalse = true;
     private Set<Coordinate> uniqueCoordinates = new HashSet<>();
 
-
+    private List<JourneyInfo> activeBuses = new ArrayList<>();
     public BusIconController(MapView mapView) {
         //initialise variables
         this.mapView = mapView;
         this.stopService = new StopService();
         MarkersWithVJC = new HashMap<>();
+
     }
 
 
@@ -65,22 +82,9 @@ public class BusIconController {
         mapView.addEventHandler(MarkerEvent.MARKER_CLICKED, event -> {
             event.consume();
             Marker clickedMarker = event.getMarker();
-            System.out.println("Marker clicked with ID: " + clickedMarker.getId());
-
-            System.out.println("MarkersWithVJC contains the following markers:");
-            for (Map.Entry<String, Marker> entry : MarkersWithVJC.entrySet()) {
-                String vehicleJourneyCode = entry.getKey();
-                Marker marker = entry.getValue();
-                System.out.println("Vehicle Journey Code: " + vehicleJourneyCode
-                        + ", Marker ID: " + marker.getId()
-                        + ", Position: " + marker.getPosition());
-            }
-
-            System.out.println("busMarkers contains the following markers:");
-            for (Marker marker : busMarkers) {
-                System.out.println("Marker ID: " + marker.getId()
-                        + ", Position: " + marker.getPosition());
-            }
+            handleMarkerClick(clickedMarker);
+            lockOntoMarker(clickedMarker);
+            System.out.println(MarkersWithVJC);
         });
 
         // check when the map view is fully initialised
@@ -90,15 +94,63 @@ public class BusIconController {
 
             }
         });
-    }
 
-    private String getVehicleJourneyCodeForMarker(Marker marker) {
+
+    }
+    private void handleMarkerClick(Marker clickedMarker) {
+        // log the ID of the clicked marker
+        System.out.println("Marker clicked with ID: " + clickedMarker.getId());
+
+        // center the map on the clicked marker and zoom in
+        Platform.runLater(() -> {
+            mapView.setCenter(clickedMarker.getPosition());
+            mapView.setZoom(16);
+        });
+
+        // find the corresponding entry in MarkersWithVJC
         for (Map.Entry<String, Marker> entry : MarkersWithVJC.entrySet()) {
-            if (entry.getValue().equals(marker)) {
-                return entry.getKey();
+            String key = entry.getKey();
+            Marker marker = entry.getValue();
+
+            if (marker.equals(clickedMarker)) {
+                // log the matched entry
+                System.out.println("Matched entry in MarkersWithVJC: " + key);
+
+                // split the key to separate Route ID and Vehicle Journey Code
+                int underscoreIndex = key.indexOf("_");
+                if (underscoreIndex != -1) {
+                    String routeId = key.substring(0, underscoreIndex); // before the first underscore
+                    String vehicleJourneyCode = key.substring(underscoreIndex + 1);
+
+                    System.out.println("Route ID: " + routeId);
+                    System.out.println("Vehicle Journey Code: " + vehicleJourneyCode);
+
+                    // clear existing polylines
+                    clearRenderedPolylines();
+
+                    // get and plot the polyline for the clicked marker's journey
+                    RouteData selectedRouteData = routeService.getRouteData(routeId);
+                    String selectedPolylineData = selectedRouteData.getPolylineData();
+                    String polylineData = getPolylineDataForJourney(routeId);
+                    if (polylineData != null) {
+                        System.out.println("polyline data: " + polylineData);
+                        plotIndividualPolylines(selectedPolylineData, routeId);
+                    } else {
+                        System.out.println("polyline data null");
+                    }
+
+                } else {
+                    System.out.println("Invalid format in MarkersWithVJC key: " + key);
+                }
+            } else {
+                System.out.println("No matching entry found in MarkersWithVJC for clicked marker.");
             }
         }
-        return null;
+    }
+
+    private String getPolylineDataForJourney(String routeId) {
+        RouteData routeData = routeService.getRouteData(routeId);
+        return routeData != null ? routeData.getPolylineData() : null;
     }
 
 
@@ -132,7 +184,10 @@ public class BusIconController {
             busMarkers.clear();
         }
 
-        // check if there are any polylines to clear
+        clearRenderedPolylines();
+    }
+    private void clearRenderedPolylines() {
+        // remove all currently rendered polylines from the map
         if (allPolylines.isEmpty()) {
             System.out.println("No polylines to remove.");
         } else {
@@ -235,12 +290,11 @@ public class BusIconController {
                     // decode the polyline data into coordinates and start bus movement on the map
                     List<Coordinate> routeCoordinates = PolylineDecoder.decodeAndConcatenatePolylinesFromString(polylineData);
                     clearRenderingState();
-                    startBusMovement(journeyInfo, journeyLegs, routeCoordinates, LocalTime.now());
+                    //startBusMovement(journeyInfo, journeyLegs, routeCoordinates, LocalTime.now(),null,null);
 
                     System.out.println("Resource usage after starting bus movement:");
                     ResourceMonitor.printSystemMetrics();
                 } else {
-                    // if no journey legs are found, log a message
                     Platform.runLater(() -> System.out.println("No journey legs found for Vehicle Journey Code: " + vehicleJourneyCode));
                 }
             } catch (SQLException e) {
@@ -249,21 +303,83 @@ public class BusIconController {
             }
         }
     }
+    public void mapActiveBuses(String Day, LocalDateTime testDateTime, int timeWindowMinutes, String selectedRoute, String SelectedVJC) throws SQLException, IOException, InterruptedException {
+        // display the loading indicator while the map is being updated
+        Platform.runLater(() -> loadingIndicator.setVisible(true));
 
-    public void mapActiveBuses(String Day,LocalTime testTime, int timeWindowMinutes, String selectedRoute) throws SQLException, IOException, InterruptedException {
-
-        // clear the map view of any existing markers and polylines
-        clearMapView();
-
+        // clear the closest buses map to store new entries
+        closestBuses.clear();
+        Map<String, Marker> newMarkersWithVJC = new HashMap<>();
+        List<Marker> newBusMarkers = new ArrayList<>();
+        boolean matchFound = false;
         List<Coordinate> coordinatesForRoute = new ArrayList<>();
 
+        // extract the time part for the findActiveBusesInTimeFrame method
+        LocalTime testTime = testDateTime.toLocalTime();
+        activeBuses.clear();
+
         // find active buses within the specified time window
-        List<JourneyInfo> activeBuses = findActiveBusesInTimeFrame(testTime, timeWindowMinutes,Day);
+        activeBuses = findActiveBusesInTimeFrame(testTime, timeWindowMinutes, Day);
+        System.out.println("Active buses found: " + activeBuses.size());
+
+        // log each active bus
         for (JourneyInfo journeyInfo : activeBuses) {
-            if (selectedRoute == null || journeyInfo.getRoute().equals(selectedRoute)) {
+            System.out.println("Active Bus - Route: " + journeyInfo.getRoute() + ", VJC: " + journeyInfo.getVehicleJourneyCode() + ", Departure Time: " + journeyInfo.getClosestDepartureTime());
+        }
+
+        // determine the closest bus for each vehicle journey code across all routes
+        for (JourneyInfo journeyInfo : activeBuses) {
+            String vehicleJourneyCode = journeyInfo.getVehicleJourneyCode();
+            LocalTime closestDepartureTime = journeyInfo.getClosestDepartureTime();
+            String routeId = journeyInfo.getRoute();
+
+            // calculate the time difference
+            java.time.Duration difference = java.time.Duration.between(testTime, closestDepartureTime);
+
+            // adjust the difference if it wraps around midnight
+            if (difference.isNegative()) {
+                difference = difference.plusDays(1);
+            }
+
+
+            String uniqueKey = routeId + "_" + vehicleJourneyCode;
+
+            // check if there is an existing entry with the same key (routeId and vehicleJourneyCode)
+            if (!closestBuses.containsKey(uniqueKey) || difference.compareTo(java.time.Duration.between(testTime, closestBuses.get(uniqueKey).getClosestDepartureTime())) < 0) {
+                // add the closest bus to the map
+                System.out.println("added to closestBuses: Route " + routeId + ", VJC: " + vehicleJourneyCode);
+                closestBuses.put(uniqueKey, journeyInfo);
+            } else {
+                // print information about the closer bus already in closestBuses
+                JourneyInfo existingJourney = closestBuses.get(uniqueKey);
+                System.out.println("not added to closestBuses: Route " + routeId + ", VJC: " + vehicleJourneyCode + " - Closer bus already in list");
+                System.out.println("closer bus details - Route: " + existingJourney.getRoute() + ", VJC: " + existingJourney.getVehicleJourneyCode() + ", Departure Time: " + existingJourney.getClosestDepartureTime());
+            }
+        }
+
+
+        System.out.println("Final closest buses: " + closestBuses);
+
+        // add the coordinates of the closest buses to the route coordinates list
+        for (JourneyInfo journeyInfo : activeBuses) {
+            String routeId = journeyInfo.getRoute();
+            String vehicleJourneyCode = journeyInfo.getVehicleJourneyCode();
+            // check if the selected route matches or if no route is selected
+            if (selectedRoute == null || routeId.equals(selectedRoute)) {
                 double longitude = journeyInfo.getLongitude();
                 double latitude = journeyInfo.getLatitude();
                 coordinatesForRoute.add(new Coordinate(latitude, longitude));
+
+                // check if the selected VJC matches the current journey
+                if (vehicleJourneyCode.equals(SelectedVJC) && routeId.equals(selectedRoute)) {
+                    System.out.println("Match found: Route " + routeId + ", VJC: " + vehicleJourneyCode);
+                    matchFound = true;
+                    System.out.println("markers with vjcoid: " + MarkersWithVJC);
+                } else {
+                    System.out.println("Match not found for Route " + routeId + ", VJC: " + vehicleJourneyCode);
+                }
+            } else {
+                System.out.println("Route does not match: " + routeId + " (Expected: " + selectedRoute + ")");
             }
         }
 
@@ -277,40 +393,29 @@ public class BusIconController {
         if (isFirstCall) {
             System.out.println("First call - not using selected polyline.");
             isFirstCall = false;
-
-            // if coordinates are found, centre the map on the first coordinate
-            if (!coordinatesForRoute.isEmpty()) {
-                Coordinate centerCoordinate = coordinatesForRoute.get(0);
-                System.out.println("centre coordinates" + centerCoordinate);
-                Platform.runLater(() -> mapView.setCenter(centerCoordinate));
-            } else {
-                System.out.println("No coordinates found for the selected route.");
-            }
-
         } else {
             // fetch and plot the selected route's polyline data
-            RouteData selectedRouteData = routeService.getRouteData(selectedRoute);
-            if (selectedRouteData == null) {
-                System.err.println("No RouteData found for Route ID: " + selectedRoute);
-                return;
-            }
-
-            String selectedPolylineData = selectedRouteData.getPolylineData();
-            if (selectedPolylineData == null) {
-                System.out.println("Polyline data is null for Route ID: " + selectedRoute);
-                return;
-            }
-
-            // plot the polyline and centre the map if coordinates are found
-            if (!coordinatesForRoute.isEmpty()) {
-                Coordinate centerCoordinate = coordinatesForRoute.get(0);
-
-                Platform.runLater(() -> {
-                    plotIndividualPolylines(selectedPolylineData, selectedRoute);
-                    mapView.setCenter(centerCoordinate);
-                    mapView.setZoom(15);
-                });
+            if (selectedRoute == null) {
+                System.out.println("Error: selectedRoute is null! This should not happen.");
             } else {
+                System.out.println("Selected Route is not null.");
+            }
+            RouteData selectedRouteData = selectedRoute != null ? routeService.getRouteData(selectedRoute) : null;
+
+            if (selectedRouteData != null) {
+                String selectedPolylineData = selectedRouteData.getPolylineData();
+                if (selectedPolylineData != null) {
+                    // plot the polyline for the route
+                    Platform.runLater(() -> plotIndividualPolylines(selectedPolylineData, selectedRoute));
+                } else {
+                    System.out.println("Polyline data is null for Route ID: " + selectedRoute);
+                }
+            } else {
+                System.out.println("Route data is null for selected route: " + selectedRoute);
+            }
+
+            // if no selected route or no polyline data found, center of coordinates
+            if (coordinatesForRoute.isEmpty()) {
                 System.out.println("No coordinates found for the selected route.");
             }
         }
@@ -321,25 +426,25 @@ public class BusIconController {
         long startTime = System.nanoTime();
 
         // process each active bus journey
-        for (JourneyInfo journeyInfo : activeBuses) {
+        for (JourneyInfo journeyInfo : closestBuses.values()) {
             String routeId = journeyInfo.getRoute();
             String vehicleJourneyCode = journeyInfo.getVehicleJourneyCode();
-            System.out.println(journeyInfo);
+            System.out.println("Processing Journey - Route: " + routeId + ", VJC: " + vehicleJourneyCode);
 
             try {
                 // fetch journey legs for the current route and vehicle journey code
-                List<JourneyLeg> journeyLegs = getJourneyLegs(routeId, vehicleJourneyCode,Day);
+                List<JourneyLeg> journeyLegs = getJourneyLegs(routeId, vehicleJourneyCode, Day);
                 if (!journeyLegs.isEmpty()) {
                     RouteData routeData = routeService.getRouteData(routeId);
                     if (routeData == null) {
                         System.err.println("No RouteData found for Route ID: " + routeId);
-                        return;
+                        continue;
                     }
 
                     String polylineData = routeData.getPolylineData();
                     if (polylineData == null) {
-                        System.out.println("Route is null: " + routeId);
-                        return;
+                        System.out.println("Polyline data is null for Route ID: " + routeId);
+                        continue;
                     }
 
                     // decode the polyline data into coordinates
@@ -347,40 +452,68 @@ public class BusIconController {
 
                     clearRenderingState();
                     // start bus movement along the decoded route
-                    startBusMovement(journeyInfo, journeyLegs, routeCoordinates, testTime);
-
-                    // monitor resource usage after starting bus movement
-                    System.out.println("Resource usage after starting bus movement:");
-                    ResourceMonitor.printSystemMetrics();
+                    startBusMovement(journeyInfo, journeyLegs, routeCoordinates, testTime, selectedRoute, SelectedVJC, newMarkersWithVJC, newBusMarkers);
 
                 } else {
-                    Platform.runLater(() -> System.out.println("No journey legs found for Vehicle Journey Code: " + vehicleJourneyCode));
+                    System.out.println("No journey legs found for Vehicle Journey Code: " + vehicleJourneyCode);
                 }
             } catch (SQLException e) {
-                Platform.runLater(() -> e.printStackTrace());
+                System.err.println("SQLException occurred while processing Journey - Route: " + routeId + ", VJC: " + vehicleJourneyCode);
+                e.printStackTrace();
             }
 
             // log information about the current state of markers and polylines
-            System.out.println(routeId);
+            System.out.println("Current Route ID: " + routeId);
             System.out.println("Number of markers in MarkersWithVJC: " + MarkersWithVJC.size());
             System.out.println("Number of markers in busMarkers: " + busMarkers.size());
             System.out.println("Number of rendered bus markers: " + renderedBusMarkers.size());
             System.out.println("Number of rendered polylines: " + renderedPolylines.size());
         }
 
-        // calculate and log execution time
-        long endTime = System.nanoTime();
-        long duration = (endTime - startTime);
-        System.out.println("Execution time: " + duration + " nanoseconds");
+        Platform.runLater(() -> {
+            // clear the map view of any existing markers and polylines
+            clearMapView();
 
-        // monitor final resource usage
-        System.out.println("Final resource usage:");
-        ResourceMonitor.printSystemMetrics();
+            // update the global markers and bus markers with the newly prepared ones
+            MarkersWithVJC.clear();
+            MarkersWithVJC.putAll(newMarkersWithVJC);
+
+            busMarkers.clear();
+            busMarkers.addAll(newBusMarkers);
+
+            // add the new markers to the map view
+            for (Marker marker : busMarkers) {
+                mapView.addMarker(marker);
+            }
+
+            // lock onto the selected marker
+            if (SelectedVJC != null) {
+                String uniqueKey = selectedRoute + "_" + SelectedVJC;
+                Marker markerToLock = MarkersWithVJC.get(uniqueKey);
+
+                if (markerToLock != null) {
+                    System.out.println("Locking onto marker with key: " + uniqueKey);
+                    lockOntoMarker(markerToLock);
+                    handleMarkerClick(markerToLock);
+                    markerToLock.setVisible(true);
+                    mapView.setCenter(markerToLock.getPosition());
+                    mapView.setZoom(18);
+                } else {
+                    System.out.println("Marker not found for key: " + uniqueKey);
+                }
+            }
+
+
+            Platform.runLater(() -> loadingIndicator.setVisible(true));
+        });
+
     }
 
-    public void startBusMovement(JourneyInfo journeyInfo, List<JourneyLeg> journeyLegs, List<Coordinate> routeCoordinates, LocalTime startTime) {
+    public void startBusMovement(JourneyInfo journeyInfo, List<JourneyLeg> journeyLegs, List<Coordinate> routeCoordinates, LocalTime startTime, String selectedRoute, String selectedVJC, Map<String, Marker> newMarkersWithVJC, List<Marker> newBusMarkers) {
         String vehicleJourneyCode = journeyInfo.getVehicleJourneyCode();
         String routeId = journeyInfo.getRoute();
+        System.out.println("vehicle journey code : " + vehicleJourneyCode);
+        System.out.println("route :" + routeId);
 
         // check if the map view is initialised
         if (mapView == null) {
@@ -411,35 +544,35 @@ public class BusIconController {
 
         // initialise the bus marker at the starting coordinate
         Coordinate busCoordinate = new Coordinate(journeyInfo.getLatitude(), journeyInfo.getLongitude());
-        final Marker[] busMarker = {null};
+        Marker busMarker;
 
         // add the bus marker if its coordinate is unique
         if (uniqueCoordinates.add(busCoordinate)) {
-            busMarker[0] = new Marker(getClass().getResource(markerImagePath))
+            busMarker = new Marker(getClass().getResource(markerImagePath))
                     .setPosition(busCoordinate)
                     .setVisible(true);
 
             String uniqueKey = routeId + "_" + vehicleJourneyCode;
-            MarkersWithVJC.put(uniqueKey, busMarker[0]);
-            busMarkers.add(busMarker[0]);
+            newMarkersWithVJC.put(uniqueKey, busMarker);
+            newBusMarkers.add(busMarker);
 
-            Platform.runLater(() -> mapView.addMarker(busMarker[0]));
+            // add the marker to the map view
+            Platform.runLater(() -> mapView.addMarker(busMarker));
         } else {
+            busMarker = null;
             System.out.println("Duplicate coordinate found: " + busCoordinate + ". Marker not added.");
         }
 
-        // remove any duplicate markers from the map
-        removeDuplicateMarkers();
-
         // start bus movement if the marker was successfully added
-        if (busMarker[0] != null) {
-            final LocalTime[] currentTime = {startTime};
+        if (busMarker != null) {
+            // use AtomicReference to ensure thread-safe updates to currentTime during animaton
+            AtomicReference<LocalTime> currentTime = new AtomicReference<>(startTime);
 
             // create a timeline to move the bus along the route
-            Timeline busTimeline = new Timeline(new KeyFrame(Duration.millis(200), event -> {
+            Timeline busTimeline = new Timeline(new KeyFrame(javafx.util.Duration.millis(100), event -> {
                 // increment currentTime by 200ms per tick
-                currentTime[0] = currentTime[0].plusNanos(200000000);
-                moveBus(busMarker[0], journeyLegs, routeCoordinates, stopCoordinates, currentTime[0]);
+                currentTime.set(currentTime.get().plusNanos(200000000));
+                moveBus(busMarker, journeyLegs, routeCoordinates, stopCoordinates, currentTime.get());
             }));
             busTimeline.setCycleCount(Timeline.INDEFINITE);
             busTimeline.play();
@@ -451,82 +584,8 @@ public class BusIconController {
     public void clearRenderingState() {
         uniqueCoordinates.clear();
     }
-/**
-    public void compareMarkers() {
-
-        Set<Coordinate> vjcCoordinates = new HashSet<>();
-        Set<Coordinate> busCoordinates = new HashSet<>();
 
 
-        for (Map.Entry<String, Marker> entry : MarkersWithVJC.entrySet()) {
-            Marker marker = entry.getValue();
-            vjcCoordinates.add(marker.getPosition());
-        }
-
-
-        for (Marker marker : busMarkers) {
-            busCoordinates.add(marker.getPosition());
-        }
-
-
-        Set<Coordinate> uniqueToVJC = new HashSet<>(vjcCoordinates);
-        uniqueToVJC.removeAll(busCoordinates);
-
-
-        Set<Coordinate> uniqueToBusMarkers = new HashSet<>(busCoordinates);
-        uniqueToBusMarkers.removeAll(vjcCoordinates);
-
-
-        if (!uniqueToVJC.isEmpty()) {
-            System.out.println("Markers in MarkersWithVJC but not in busMarkers:");
-            for (Coordinate coordinate : uniqueToVJC) {
-                //System.out.println("Coordinate: " + coordinate);
-            }
-        } else {
-            System.out.println("No unique markers found in MarkersWithVJC.");
-        }
-
-        if (!uniqueToBusMarkers.isEmpty()) {
-            System.out.println("Markers in busMarkers but not in MarkersWithVJC:");
-            for (Coordinate coordinate : uniqueToBusMarkers) {
-                //System.out.println("Coordinate: " + coordinate);
-            }
-        } else {
-            System.out.println("No unique markers found in busMarkers.");
-        }
-    }
-**/
-
-public void removeDuplicateMarkers() {
-
-    // create a set to track unique coordinates
-    Set<Coordinate> uniqueCoordinates = new HashSet<>();
-
-    // create an iterator to traverse through the busMarkers list
-    Iterator<Marker> iterator = busMarkers.iterator();
-
-    // iterate over the bus markers
-    while (iterator.hasNext()) {
-        Marker marker = iterator.next();
-        Coordinate coordinate = marker.getPosition();
-
-        // check if the coordinate is already in the set (indicating a duplicate marker)
-        if (!uniqueCoordinates.add(coordinate)) {
-            System.out.println("Duplicate marker found and removed: " + marker.getId() +
-                    ", Position: " + marker.getPosition());
-
-            // remove the marker from the map and from the list
-            Platform.runLater(() -> mapView.removeMarker(marker));
-            iterator.remove();
-        }
-    }
-
-    System.out.println("Remaining unique markers in busMarkers:");
-    for (Marker remainingMarker : busMarkers) {
-        // System.out.println("Marker ID: " + remainingMarker.getId() +
-        // ", Position: " + remainingMarker.getPosition());
-    }
-}
     private void moveBus(Marker initialBusMarker, List<JourneyLeg> journeyLegs, List<Coordinate> routeCoordinates, Map<String, Coordinate> stopCoordinates, LocalTime currentTime) {
         final Marker[] busMarker = {initialBusMarker};
 
@@ -597,6 +656,41 @@ public void removeDuplicateMarkers() {
                 break;
             }
         }
+
+    }
+
+    private void lockOntoMarker(Marker marker) {
+        // stop the previous lock if there is one
+        if (currentLockedMarker != null && lockTimeline != null) {
+            lockTimeline.stop();  // stop the previous lock timeline
+            currentLockedMarker = null;
+            isMapLocked = false;
+        }
+
+        isMapLocked = true;
+        currentLockedMarker = marker;
+
+        // centre the map on the marker and zoom in
+        Platform.runLater(() -> {
+            mapView.setCenter(marker.getPosition());
+            mapView.setZoom(18);
+        });
+
+        // unlock the map when the user drags
+        mapView.addEventFilter(MouseEvent.MOUSE_DRAGGED, event -> {
+            isMapLocked = false;
+        });
+
+        // keep centering the map on the marker while it is locked
+        lockTimeline = new Timeline(new KeyFrame(javafx.util.Duration.millis(100), e -> {
+            if (isMapLocked && currentLockedMarker != null) {
+                Platform.runLater(() -> {
+                    mapView.setCenter(currentLockedMarker.getPosition());
+                });
+            }
+        }));
+        lockTimeline.setCycleCount(Timeline.INDEFINITE);
+        lockTimeline.play();
     }
 
 }

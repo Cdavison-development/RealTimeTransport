@@ -41,7 +41,7 @@ public class addTimes {
         }
     }
     public static void createJourneyCodeTable(Connection conn) throws SQLException {
-        String createTableSQL = "CREATE TABLE IF NOT EXISTS journeyCodes_test " +
+        String createTableSQL = "CREATE TABLE IF NOT EXISTS journeyCode " +
                 "(id INTEGER PRIMARY KEY AUTOINCREMENT, " +
                 "journey_code TEXT NOT NULL, " +
                 "route_id TEXT NOT NULL, " +
@@ -49,12 +49,12 @@ public class addTimes {
                 "Vehicle_journey_code TEXT NOT NULL, " +
                 "days_of_week TEXT NOT NULL)";
         try (Statement stmt = conn.createStatement()) {
-            stmt.execute(createTableSQL);  // execute SQL to create the table
+            stmt.execute(createTableSQL);
         }
     }
 
     public static void createJourneyRouteTable(Connection conn) throws SQLException {
-        String createweekdayTableSQL = "CREATE TABLE IF NOT EXISTS saturday_routes " +
+        String createWeekdayTableSQL = "CREATE TABLE IF NOT EXISTS weekday_routes " +
                 "(id INTEGER PRIMARY KEY AUTOINCREMENT, " +
                 "route_id TEXT NOT NULL, " +
                 "journey_pattern_ref TEXT NOT NULL, " +
@@ -62,9 +62,10 @@ public class addTimes {
                 "from_stop TEXT NOT NULL, " +
                 "to_stop TEXT NOT NULL, " +
                 "days_of_week TEXT NOT NULL, " +
-                "departure_time TEXT NOT NULL)";
+                "departure_time TEXT NOT NULL, " +
+                "date DATE NOT NULL)";
 
-        String createsaturdayTableSQL = "CREATE TABLE IF NOT EXISTS sunday_routes " +
+        String createSaturdayTableSQL = "CREATE TABLE IF NOT EXISTS saturday_routes " +
                 "(id INTEGER PRIMARY KEY AUTOINCREMENT, " +
                 "route_id TEXT NOT NULL, " +
                 "journey_pattern_ref TEXT NOT NULL, " +
@@ -72,9 +73,10 @@ public class addTimes {
                 "from_stop TEXT NOT NULL, " +
                 "to_stop TEXT NOT NULL, " +
                 "days_of_week TEXT NOT NULL, " +
-                "departure_time TEXT NOT NULL)";
+                "departure_time TEXT NOT NULL, " +
+                "date DATE NOT NULL)";
 
-        String createsundaytableTableSQL = "CREATE TABLE IF NOT EXISTS weekday_routes " +
+        String createSundayTableSQL = "CREATE TABLE IF NOT EXISTS sunday_routes " +
                 "(id INTEGER PRIMARY KEY AUTOINCREMENT, " +
                 "route_id TEXT NOT NULL, " +
                 "journey_pattern_ref TEXT NOT NULL, " +
@@ -82,12 +84,13 @@ public class addTimes {
                 "from_stop TEXT NOT NULL, " +
                 "to_stop TEXT NOT NULL, " +
                 "days_of_week TEXT NOT NULL, " +
-                "departure_time TEXT NOT NULL)";
+                "departure_time TEXT NOT NULL, " +
+                "date DATE NOT NULL)";
 
         try (Statement stmt = conn.createStatement()) {
-            stmt.execute(createweekdayTableSQL);  // create the saturday routes table
-            stmt.execute(createsaturdayTableSQL);  // create the sunday routes table
-            stmt.execute(createsundaytableTableSQL);  // create the weekday routes table
+            stmt.execute(createWeekdayTableSQL);  // create the saturday routes table
+            stmt.execute(createSaturdayTableSQL);  // create the sunday routes table
+            stmt.execute(createSundayTableSQL);  // create the weekday routes table
 
         }
     }
@@ -104,7 +107,7 @@ public class addTimes {
             processXMLAndInsertData(doc, conn, filePath);  // process the document and insert data into the database
 
         } catch (Exception e) {
-            e.printStackTrace();  // handle any exceptions that occur
+            e.printStackTrace();
         }
     }
 

@@ -24,6 +24,8 @@ import javafx.util.Duration;
 import javafx.scene.layout.*;
 import java.io.IOException;
 import java.sql.SQLException;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -42,6 +44,34 @@ import static com.project.busfinder.Mapping.simulateBusLocations.*;
 //
 // if the user wants to simulate a bus route, it may be better, and easier, to just re-render all objects
 // and simulate as if the time the simulated bus route begins is this current time.
+
+/**
+ *  Things to remember since most recent push (14/08/24)
+ *
+ *  classes to be handled with new datasets
+ *
+ *
+ * getLive routes function in getRoutes Class and its getter class
+ *
+ *
+ * all functions in simulate BusLocation
+ *
+ * add a day component to track bus panel.
+ * return the chosen item
+ *
+ * This will be used to specify what routes table we use
+ *
+ * following this, any function that calls any of the above
+ *
+ * mapActive buses needs to take a day parameter
+ *
+ * if buses are showing signs of being late, switch to live tracking.
+ *
+ * if the slected day allows live tracking, switch to live tracking on day selection
+ *
+ * rather than resetting the marker list on re-rendering of buses, marker list does not completely reset.
+ * performing multiple renders does not return render list to 0
+ */
 public class MainController {
     @FXML
     private VBox sidePanel;
@@ -94,8 +124,14 @@ public class MainController {
 
                 // map active buses after the map is ready
                 try {
-                    LocalTime testTime = LocalTime.of(8, 04);
-                    busIconController.mapActiveBuses(testTime, 5, null); // initialise after the map is ready
+                    LocalDate date = LocalDate.of(2024, 8, 18); // Example date (for "Sunday")
+                    LocalTime testTime = LocalTime.of(8, 4, 0); // Example time
+
+
+                    LocalDateTime testDateTime = LocalDateTime.of(date, testTime);
+
+
+                    busIconController.mapActiveBuses("Sunday", testDateTime, 5, null,null); // initialise after the map is ready
                 } catch (IOException | InterruptedException | SQLException e) {
                     throw new RuntimeException(e); // handle exceptions by throwing a runtime exception
                 }

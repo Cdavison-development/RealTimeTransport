@@ -5,9 +5,7 @@ import com.project.busfinder.util.readLiveLocation;
 
 import java.io.IOException;
 import java.sql.*;
-import java.time.DayOfWeek;
-import java.time.LocalDate;
-import java.time.LocalTime;
+import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.util.AbstractMap;
 import java.util.ArrayList;
@@ -231,9 +229,10 @@ public class simulateBusLocations {
         return pattern; // return the original pattern if no modification is needed
     }
 
-    public static List<JourneyLeg> getJourneyLegs(String routeId, String vehicleJourneyCode,String day) throws SQLException {
+    public static List<JourneyLeg> getJourneyLegs(String routeId, String vehicleJourneyCode, String day) throws SQLException {
         List<JourneyLeg> journeyLegs = new ArrayList<>();
         String tableName;
+
         switch (day) {
             case "Saturday":
                 tableName = "saturday_routes";
@@ -245,13 +244,13 @@ public class simulateBusLocations {
                 tableName = "weekday_routes";
                 break;
         }
-        // SQL query to fetch journey legs with associated bus stop coordinates
+// SQL query to fetch journey legs with associated bus stop coordinates
         String query = String.format("""
-        SELECT jr.departure_time, jr.from_stop, jr.to_stop, bs.longitude, bs.latitude
-        FROM %s jr
-        JOIN bus_stops bs ON jr.from_stop = bs.stop_id
-        WHERE jr.route_id = ? AND jr.Vehicle_journey_code = ?
-        ORDER BY jr.departure_time
+    SELECT jr.departure_time, jr.date, jr.from_stop, jr.to_stop, bs.longitude, bs.latitude
+    FROM %s jr
+    JOIN bus_stops bs ON jr.from_stop = bs.stop_id
+    WHERE jr.route_id = ? AND jr.Vehicle_journey_code = ?
+    ORDER BY jr.date ASC, jr.departure_time ASC
     """, tableName);
 
         try (PreparedStatement pstmt = conn.prepareStatement(query)) {
@@ -264,6 +263,8 @@ public class simulateBusLocations {
             // iterate through the result set and create JourneyLeg objects
             while (rs.next()) {
                 String departureTimeString = rs.getString("departure_time");
+                long dateMillis = rs.getLong("date");
+                LocalDate departureDate = Instant.ofEpochMilli(dateMillis).atZone(ZoneId.systemDefault()).toLocalDate();
                 String fromStop = rs.getString("from_stop");
                 String toStop = rs.getString("to_stop");
                 double longitude = rs.getDouble("longitude");
@@ -272,12 +273,17 @@ public class simulateBusLocations {
                 // parse the departure time from the string format
                 LocalTime departureTime = LocalTime.parse(departureTimeString, DateTimeFormatter.ofPattern("HH:mm:ss"));
 
+                // Check if the route crosses into a new day
+                if (departureTime.equals(LocalTime.MIDNIGHT)) {
+                    departureDate = departureDate.plusDays(1);
+                }
+
                 // create a new JourneyLeg object and add it to the list
-                JourneyLeg leg = new JourneyLeg(fromStop, toStop, departureTime);
+                JourneyLeg leg = new JourneyLeg(fromStop, toStop, departureTime, departureDate);
                 journeyLegs.add(leg);
             }
         }
-        return journeyLegs; // return the list of journey legs
+        return journeyLegs;
     }
 
     //unsure how it will handle two routes at the same time, example route: 10,Vehicle Journey Code: VJ_62, Departure Time: 08:00, From Stop: 2800S14018B, To Stop: 2800S14019A, Longitude: -2.776328, Latitude: 53.437650, route: 10,Vehicle Journey Code: VJ_63, Departure Time: 08:00, From Stop: 2800S44020B, To Stop: 2800S51011B, Longitude: -2.834953, Latitude: 53.423403,
@@ -355,7 +361,7 @@ public class simulateBusLocations {
         } catch (SQLException e) {
             e.printStackTrace();
         }
-
+        //System.out.println("journeyList : " +journeyInfoList);
         return journeyInfoList;
     }
 }

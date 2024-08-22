@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<?import com.sothawo.mapjfx.MapView?>
+<?import com.sothawo.mapjfx.*?>
+<?import javafx.scene.*?>
 <?import javafx.scene.control.*?>
 <?import javafx.scene.image.*?>
 <?import javafx.scene.layout.*?>
@@ -28,6 +29,9 @@
                                 <image>
                                     <Image preserveRatio="true" smooth="true" url="@images/arrow3.png" />
                                 </image>
+                        <cursor>
+                           <Cursor fx:constant="HAND" />
+                        </cursor>
                             </ImageView>
                         </graphic>
                     </Button>

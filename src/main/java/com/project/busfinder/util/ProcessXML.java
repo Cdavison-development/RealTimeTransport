@@ -30,19 +30,7 @@ import static com.project.busfinder.helperFunctions.getUniqueIdentifer.GetUnique
 
 // need to account for the different days outlines in XML.
 
-/**
- *
- *  what may need to change
- *
- *  Routes
- *  JourneyCode
- *  JourneyRoutes
- *
- * considerations: need to consider day of the week
- *
- *  do buses take different routes on different days of the week
- *
- */
+
 public class ProcessXML {
 
     public static void main(String[] args) {
@@ -206,7 +194,7 @@ public class ProcessXML {
 
         // adjust date if the time is before 3AM, consider this time part of the previous day
         if (time.isBefore(LocalTime.of(3, 0))) {
-            baseDate = baseDate.minusDays(1);
+            baseDate = baseDate.plusDays(1);
         }
 
         return baseDate;
@@ -398,8 +386,9 @@ public class ProcessXML {
 
     private static void insertLegsIntoDatabase(List<JourneyLegDeparture> legs, String routeId, String journeyPatternRef, String vehicleJourneyRef, List<String> daysOfWeek, Connection conn, String tableName) {
         // iterate through each leg and insert its data into the specified table
+
         for (JourneyLegDeparture leg : legs) {
-            String insertSQL = "INSERT INTO " + tableName +"(route_id, journey_pattern_ref, Vehicle_journey_code, from_stop, to_stop, days_of_week, departure_time,date) VALUES (?, ?, ?, ?, ?, ?, ?,?)";
+            String insertSQL = "INSERT INTO " + tableName + "(route_id, journey_pattern_ref, Vehicle_journey_code, from_stop, to_stop, days_of_week, departure_time,date) VALUES (?, ?, ?, ?, ?, ?, ?,?)";
             try (PreparedStatement pstmt = conn.prepareStatement(insertSQL)) {
                 pstmt.setString(1, routeId);
                 pstmt.setString(2, journeyPatternRef);
