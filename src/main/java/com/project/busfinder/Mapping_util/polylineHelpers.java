@@ -1,4 +1,4 @@
-package com.project.busfinder.Mapping;
+package com.project.busfinder.Mapping_util;
 
 import com.sothawo.mapjfx.Coordinate;
 

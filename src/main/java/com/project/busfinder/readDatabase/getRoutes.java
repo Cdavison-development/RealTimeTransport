@@ -1,7 +1,7 @@
 package com.project.busfinder.readDatabase;
 
 
-import com.project.busfinder.util.readLiveLocation;
+import com.project.busfinder.Mapping_util.LiveRouteInfo;
 
 import java.io.IOException;
 import java.sql.*;
@@ -11,6 +11,7 @@ import java.util.*;
 
 
 import static com.project.busfinder.util.readLiveLocation.fetchAndProcessResponse;
+import static com.project.busfinder.util.readLiveLocation.processXmlResponse;
 
 /**
  *
@@ -52,9 +53,9 @@ public class getRoutes {
     }
 
     public static Map<String, Boolean> getLiveRoutes(Connection conn) throws IOException, InterruptedException {
-        ArrayList<AbstractMap.SimpleEntry<String, String>> routes = readLiveLocation.processXmlResponse(fetchAndProcessResponse());
+        List<LiveRouteInfo> routeInfoList = processXmlResponse(fetchAndProcessResponse());
         Map<String, Boolean> routeExistsMap = new HashMap<>();
-
+        System.out.println("routes :  " + routeInfoList);
 
         try (PreparedStatement pstmt = conn.prepareStatement("SELECT route_id, journey_code FROM journeyCode")) {
             ResultSet rs = pstmt.executeQuery();
@@ -66,37 +67,26 @@ public class getRoutes {
             e.printStackTrace();
         }
 
-        for (AbstractMap.SimpleEntry<String, String> entry : routes) {
-            String route = entry.getKey();
-            String pattern = entry.getValue();
-
-
+        for (LiveRouteInfo routeInfo : routeInfoList) {
+            String route = routeInfo.getLineRef();
+            String journeyRef = routeInfo.getJourneyRef();
 
             try (PreparedStatement pstmt = conn.prepareStatement("SELECT * FROM journeyCode WHERE route_id = ? AND journey_code = ?")) {
                 pstmt.setString(1, route);
-                pstmt.setString(2, pattern);
+                pstmt.setString(2, journeyRef);
                 ResultSet rs = pstmt.executeQuery();
 
                 if (rs.next()) {
-
                     String journeyCode = rs.getString("journey_code");
                     String route_id = rs.getString("route_id");
 
-                    //System.out.println("Matching Journey:");
-                    //System.out.println("journeyCode: " + journeyCode);
-                    //System.out.println("route_id: " + route_id);
-
-
-                    routeExistsMap.put(route, true);
-                } else {
-                    //System.out.println("No matching journey found for Route: " + route + ", Pattern: " + pattern);
+                    routeExistsMap.put(route, true); // mark as live if a match is found
                 }
             } catch (SQLException e) {
                 e.printStackTrace();
             }
         }
 
-        //System.out.println(routeExistsMap);
         return routeExistsMap;
     }
 }

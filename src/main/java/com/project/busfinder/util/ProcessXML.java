@@ -33,6 +33,7 @@ import static com.project.busfinder.helperFunctions.getUniqueIdentifer.GetUnique
 
 public class ProcessXML {
 
+    public String previousDay;
     public static void main(String[] args) {
         String Filename = "data/routes/AMSY_10A_AMSYPC00011414710A_20240721_-_1894508.xml";
         try {
@@ -94,70 +95,68 @@ public class ProcessXML {
 
                 NodeList journeyPatternList = doc.getElementsByTagName("JourneyPattern");
 
-                // find and process the corresponding JourneyPattern
-                for (int j = 0; j < journeyPatternList.getLength(); j++) {
-                    Element journeyPattern = (Element) journeyPatternList.item(j);
-                    if (journeyPattern.getAttribute("id").equals(journeyPatternRef)) {
-                        String sectionRef = getNestedTextContent(journeyPattern, "JourneyPatternSectionRefs");
-                        NodeList sectionList = doc.getElementsByTagName("JourneyPatternSection");
 
-                        // insert the journey code and other relevant information into the database
-                        String JourneyCodeSQL = "INSERT INTO journeyCode (journey_code, route_id, journey_pattern_ref, Vehicle_journey_code, days_of_week) VALUES (?, ?, ?, ?, ?)";
-                        try (PreparedStatement pstmt = conn.prepareStatement(JourneyCodeSQL)) {
-                            pstmt.setString(1, journeyCode);
-                            pstmt.setString(2, routeId);
-                            pstmt.setString(3, journeyPatternRef);
-                            pstmt.setString(4, vehicleJourneyRef);
-                            pstmt.setString(5, String.join(",", daysOfWeek));
-                            pstmt.executeUpdate();
-                        }
+                    // find and process the corresponding JourneyPattern
+                    for (int j = 0; j < journeyPatternList.getLength(); j++) {
+                        Element journeyPattern = (Element) journeyPatternList.item(j);
+                        if (journeyPattern.getAttribute("id").equals(journeyPatternRef)) {
+                            String sectionRef = getNestedTextContent(journeyPattern, "JourneyPatternSectionRefs");
+                            NodeList sectionList = doc.getElementsByTagName("JourneyPatternSection");
+                            for (String dayOfWeek : daysOfWeek) {
+                                String tableName = determineTableForDays(dayOfWeek);
+                                // insert the journey code and other relevant information into the database
+                                String JourneyCodeSQL = "INSERT INTO journeyCode (journey_code, route_id, journey_pattern_ref, Vehicle_journey_code, days_of_week) VALUES (?, ?, ?, ?, ?)";
+                                try (PreparedStatement pstmt = conn.prepareStatement(JourneyCodeSQL)) {
+                                    pstmt.setString(1, journeyCode);
+                                    pstmt.setString(2, routeId);
+                                    pstmt.setString(3, journeyPatternRef);
+                                    pstmt.setString(4, vehicleJourneyRef);
+                                    pstmt.setString(5, dayOfWeek);
+                                    pstmt.executeUpdate();
+                                }
+                                // prepare to distribute and insert journey legs
+                                List<JourneyLegDeparture> sameMinuteLegs = new ArrayList<>();
+                                for (int k = 0; k < sectionList.getLength(); k++) {
+                                    Element section = (Element) sectionList.item(k);
+                                    if (section.getAttribute("id").equals(sectionRef)) {
+                                        NodeList linkList = section.getElementsByTagName("JourneyPatternTimingLink");
+                                        for (int l = 0; l < linkList.getLength(); l++) {
+                                            Element link = (Element) linkList.item(l);
+                                            String fromStop = getNestedTextContent((Element) link.getElementsByTagName("From").item(0), "StopPointRef");
+                                            String toStop = getNestedTextContent((Element) link.getElementsByTagName("To").item(0), "StopPointRef");
+                                            String runTime = getNestedTextContent(link, "RunTime");
 
-                        // prepare to distribute and insert journey legs
-                        List<JourneyLegDeparture> sameMinuteLegs = new ArrayList<>();
-                        for (int k = 0; k < sectionList.getLength(); k++) {
-                            Element section = (Element) sectionList.item(k);
-                            if (section.getAttribute("id").equals(sectionRef)) {
-                                NodeList linkList = section.getElementsByTagName("JourneyPatternTimingLink");
-                                for (int l = 0; l < linkList.getLength(); l++) {
-                                    Element link = (Element) linkList.item(l);
-                                    String fromStop = getNestedTextContent((Element) link.getElementsByTagName("From").item(0), "StopPointRef");
-                                    String toStop = getNestedTextContent((Element) link.getElementsByTagName("To").item(0), "StopPointRef");
-                                    String runTime = getNestedTextContent(link, "RunTime");
+                                            // process and adjust the departure times for legs within the same minute
+                                            if (fromStop != null && toStop != null && runTime != null) {
+                                                java.time.Duration duration = java.time.Duration.parse(runTime);
+                                                LocalTime newDepartureTime = departureTime.plus(duration);
+                                                LocalDate date = determineDateForDay(dayOfWeek, newDepartureTime);
+                                                JourneyLegDeparture journeyLeg = new JourneyLegDeparture(fromStop, toStop, javafx.util.Duration.millis(duration.toMillis()), newDepartureTime, date);
 
-                                    // process and adjust the departure times for legs within the same minute
-                                    if (fromStop != null && toStop != null && runTime != null) {
-                                        java.time.Duration duration = java.time.Duration.parse(runTime);
-                                        LocalTime newDepartureTime = departureTime.plus(duration);
+                                                if (!sameMinuteLegs.isEmpty() && !newDepartureTime.truncatedTo(ChronoUnit.MINUTES).equals(sameMinuteLegs.get(0).getDepartureTime().truncatedTo(ChronoUnit.MINUTES))) {
+                                                    distributeTimeWithinSameMinute(sameMinuteLegs);
+                                                    insertJourneyLegsIntoDB(sameMinuteLegs, routeId, journeyPatternRef, vehicleJourneyRef, dayOfWeek, conn, tableName);
+                                                    sameMinuteLegs.clear();
+                                                }
 
-                                        // determine the date based on the day of the week
-                                        for (String day : daysOfWeek) {
-                                            LocalDate date = determineDateForDay(day,newDepartureTime);
-                                            JourneyLegDeparture journeyLeg = new JourneyLegDeparture(fromStop, toStop, javafx.util.Duration.millis(duration.toMillis()), newDepartureTime, date);
-
-                                            if (!sameMinuteLegs.isEmpty() && !newDepartureTime.truncatedTo(ChronoUnit.MINUTES).equals(sameMinuteLegs.get(0).getDepartureTime().truncatedTo(ChronoUnit.MINUTES))) {
-                                                distributeTimeWithinSameMinute(sameMinuteLegs);
-                                                insertJourneyLegsIntoDB(sameMinuteLegs, routeId, journeyPatternRef, vehicleJourneyRef, daysOfWeek, conn);
-                                                sameMinuteLegs.clear();
+                                                sameMinuteLegs.add(journeyLeg);
+                                                departureTime = newDepartureTime;
+                                            } else {
+                                                System.out.println("JourneyCode: " + journeyCode);
+                                                System.out.println("RouteId: " + routeId);
                                             }
 
-                                            sameMinuteLegs.add(journeyLeg);
-                                            departureTime = newDepartureTime;
+                                            }
                                         }
-                                    } else {
-                                        System.out.println("JourneyCode: " + journeyCode);
-                                        System.out.println("RouteId: " + routeId);
                                     }
+                                // process any remaining legs after the loop
+                                if (!sameMinuteLegs.isEmpty()) {
+                                    distributeTimeWithinSameMinute(sameMinuteLegs);
+                                    insertJourneyLegsIntoDB(sameMinuteLegs, routeId, journeyPatternRef, vehicleJourneyRef, dayOfWeek, conn,tableName);
                                 }
                             }
                         }
-
-                        // process any remaining legs after the loop
-                        if (!sameMinuteLegs.isEmpty()) {
-                            distributeTimeWithinSameMinute(sameMinuteLegs);
-                            insertJourneyLegsIntoDB(sameMinuteLegs, routeId, journeyPatternRef, vehicleJourneyRef, daysOfWeek, conn);
-                        }
                     }
-                }
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -237,6 +236,7 @@ public class ProcessXML {
                 // check for each day of the week and add it to the list if present
                 if (daysOfWeekElement.getElementsByTagName("Monday").getLength() > 0) {
                     daysOfWeek.add("Monday");
+
                 }
                 if (daysOfWeekElement.getElementsByTagName("Tuesday").getLength() > 0) {
                     daysOfWeek.add("Tuesday");
@@ -317,7 +317,7 @@ public class ProcessXML {
         return departureTime;
     }
 
-    private static void insertJourneyLegsIntoDB(List<JourneyLegDeparture> journeyLegs, String routeId, String journeyPatternRef, String vehicleJourneyRef, List<String> daysOfWeek, Connection conn) {
+    private static void insertJourneyLegsIntoDB(List<JourneyLegDeparture> journeyLegs, String routeId, String journeyPatternRef, String vehicleJourneyRef, String daysOfWeek, Connection conn, String tableName) {
         // initialise variables to track legs within the same minute
         List<JourneyLegDeparture> sameMinuteLegs = new ArrayList<>();
         LocalTime currentMinute = null;
@@ -332,7 +332,7 @@ public class ProcessXML {
                 currentMinute = legMinute;
             } else {
                 // process the group of legs that occurred within the previous minute
-                processLegs(sameMinuteLegs, routeId, journeyPatternRef, vehicleJourneyRef, daysOfWeek, conn);
+                processLegs(sameMinuteLegs, routeId, journeyPatternRef, vehicleJourneyRef, daysOfWeek, conn,tableName);
 
                 // start a new group for the current leg
                 sameMinuteLegs.clear();
@@ -343,18 +343,15 @@ public class ProcessXML {
 
         // process the final group of legs after the loop
         if (!sameMinuteLegs.isEmpty()) {
-            processLegs(sameMinuteLegs, routeId, journeyPatternRef, vehicleJourneyRef, daysOfWeek, conn);
+            processLegs(sameMinuteLegs, routeId, journeyPatternRef, vehicleJourneyRef, daysOfWeek, conn,tableName);
         }
     }
 
-    private static void processLegs(List<JourneyLegDeparture> legs, String routeId, String journeyPatternRef, String vehicleJourneyRef, List<String> daysOfWeek, Connection conn) {
+    private static void processLegs(List<JourneyLegDeparture> legs, String routeId, String journeyPatternRef, String vehicleJourneyRef, String daysOfWeek, Connection conn,String tableName) {
         // distribute times within the same minute if there is more than one leg
         if (legs.size() > 1) {
             distributeTimeWithinSameMinute(legs);
         }
-
-        // determine the appropriate database table based on the days of the week
-        String tableName = determineTableForDays(daysOfWeek);
 
         // insert the processed legs into the selected database table
         insertLegsIntoDatabase(legs, routeId, journeyPatternRef, vehicleJourneyRef, daysOfWeek, conn, tableName);
@@ -372,38 +369,103 @@ public class ProcessXML {
             sameMinuteLegs.get(i).setDepartureTime(newDepartureTime);
         }
     }
-
-    private static String determineTableForDays(List<String> daysOfWeek) {
-
-        if (daysOfWeek.contains("Saturday") && daysOfWeek.size() == 1) {
-            return "saturday_routes";
-        } else if (daysOfWeek.contains("Sunday") && daysOfWeek.size() == 1) {
+//change this for each day
+private static String determineTableForDays(String dayOfWeek) {
+    switch (dayOfWeek) {
+        case "Monday":
+            return "monday_routes";
+        case "Tuesday":
+            return "tuesday_routes";
+        case "Wednesday":
+            return "wednesday_routes";
+        case "Thursday":
+            return "thursday_routes";
+        case "Friday":
+            return "friday_routes";
+        case "Saturday":
+            return "saturday_routessdx23";
+        case "Sunday":
             return "sunday_routes";
-        } else {
-            return "weekday_routes";
-        }
+        default:
+            throw new IllegalArgumentException("Invalid day of the week: " + dayOfWeek);
     }
+}
 
-    private static void insertLegsIntoDatabase(List<JourneyLegDeparture> legs, String routeId, String journeyPatternRef, String vehicleJourneyRef, List<String> daysOfWeek, Connection conn, String tableName) {
+    private static void insertLegsIntoDatabase(List<JourneyLegDeparture> journeyLegs, String routeId, String journeyPatternRef, String vehicleJourneyRef, String dayOfWeek, Connection conn,String tableName) {
+
         // iterate through each leg and insert its data into the specified table
-
-        for (JourneyLegDeparture leg : legs) {
-            String insertSQL = "INSERT INTO " + tableName + "(route_id, journey_pattern_ref, Vehicle_journey_code, from_stop, to_stop, days_of_week, departure_time,date) VALUES (?, ?, ?, ?, ?, ?, ?,?)";
+        for (JourneyLegDeparture leg : journeyLegs) {
+            String insertSQL = "INSERT INTO " + tableName + " (route_id, journey_pattern_ref, Vehicle_journey_code, from_stop, to_stop, day_of_week, departure_time, date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
             try (PreparedStatement pstmt = conn.prepareStatement(insertSQL)) {
                 pstmt.setString(1, routeId);
                 pstmt.setString(2, journeyPatternRef);
                 pstmt.setString(3, vehicleJourneyRef);
                 pstmt.setString(4, leg.getFromStop());
                 pstmt.setString(5, leg.getToStop());
-                pstmt.setString(6, String.join(",", daysOfWeek));
+                pstmt.setString(6, dayOfWeek);
                 pstmt.setString(7, leg.getDepartureTime().format(DateTimeFormatter.ofPattern("HH:mm:ss")));
                 pstmt.setDate(8, Date.valueOf(leg.getDate()));
                 pstmt.executeUpdate();
-                System.out.println("Inserted successfully.");
+                System.out.println("Inserted successfully for " + dayOfWeek + ".");
             } catch (SQLException e) {
-                System.err.println("error inserting leg into the database:");
+                System.err.println("Error inserting leg into the database for " + dayOfWeek + ":");
                 e.printStackTrace();
             }
+        }
+    }
+    public static void processXMLtoJourneyCode(Document doc, Connection conn, String filePath) throws Exception {
+        try {
+            int journeyCounter = 1;
+
+            // extract the list of VehicleJourney elements from the XML
+            NodeList vehicleJourneyList = doc.getElementsByTagName("VehicleJourney");
+
+            // extract the days of the week associated with the journeys
+            List<String> daysOfWeek = extractDaysOfWeek(doc);
+            // System.out.println("days of week  : " +daysOfWeek);
+            // List<String> previousDaysOfWeek = null;
+            // iterate over each VehicleJourney in the list
+            for (int i = 0; i < vehicleJourneyList.getLength(); i++) {
+                Element vehicleJourney = (Element) vehicleJourneyList.item(i);
+                String journeyCode = getNestedTextContent(vehicleJourney, "JourneyCode");
+                String routeId = GetUniqueIdentifier(filePath);
+                String journeyPatternRef = getNestedTextContent(vehicleJourney, "JourneyPatternRef");
+                String initialDepartureTime = getDepartureTime(filePath, journeyCode);
+                LocalTime departureTime = LocalTime.parse(initialDepartureTime, DateTimeFormatter.ofPattern("HH:mm:ss"));
+
+                // generate a unique reference for each VehicleJourney
+                String vehicleJourneyRef = "VJ_" + journeyCounter;
+                journeyCounter++;
+
+                NodeList journeyPatternList = doc.getElementsByTagName("JourneyPattern");
+
+
+                // find and process the corresponding JourneyPattern
+                for (int j = 0; j < journeyPatternList.getLength(); j++) {
+                    Element journeyPattern = (Element) journeyPatternList.item(j);
+                    if (journeyPattern.getAttribute("id").equals(journeyPatternRef)) {
+                        String sectionRef = getNestedTextContent(journeyPattern, "JourneyPatternSectionRefs");
+                        NodeList sectionList = doc.getElementsByTagName("JourneyPatternSection");
+                        for (String dayOfWeek : daysOfWeek) {
+                            String tableName = determineTableForDays(dayOfWeek);
+                            // insert the journey code and other relevant information into the database
+                            String JourneyCodeSQL = "INSERT INTO journeyCode_test (journey_code, route_id, journey_pattern_ref, Vehicle_journey_code, days_of_week) VALUES (?, ?, ?, ?, ?)";
+                            try (PreparedStatement pstmt = conn.prepareStatement(JourneyCodeSQL)) {
+                                pstmt.setString(1, journeyCode);
+                                pstmt.setString(2, routeId);
+                                pstmt.setString(3, journeyPatternRef);
+                                pstmt.setString(4, vehicleJourneyRef);
+                                pstmt.setString(5, dayOfWeek);
+                                pstmt.executeUpdate();
+                            } catch (SQLException e) {
+                                throw new RuntimeException(e);
+                            }
+                        }
+                    }
+                }
+            }
+        } finally {
+
         }
     }
 

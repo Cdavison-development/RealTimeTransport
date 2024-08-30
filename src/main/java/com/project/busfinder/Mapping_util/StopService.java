@@ -1,4 +1,4 @@
-package com.project.busfinder.Mapping;
+package com.project.busfinder.Mapping_util;
 
 import com.sothawo.mapjfx.Coordinate;
 
@@ -52,6 +52,25 @@ public class StopService {
         }
 
         return stopCoordinates; // return the map of stop coordinates
+    }
+
+    public Coordinate getCoordinates(String stopId) throws SQLException {
+        String query = "SELECT longitude, latitude FROM bus_stops WHERE stop_id = ?";
+
+        try (Connection conn = this.connect();
+        PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setString(1, stopId);
+
+            ResultSet rs = pstmt.executeQuery();
+
+            if (rs.next()) {
+                double longitude = rs.getDouble("longitude");
+                double latitude = rs.getDouble("latitude");
+                return new Coordinate(latitude, longitude);
+            } else {
+                throw new SQLException("Coordinates not found for stop ID: " + stopId);
+            }
+        }
     }
 }
 

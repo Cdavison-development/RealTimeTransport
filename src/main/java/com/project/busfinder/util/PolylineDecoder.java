@@ -91,64 +91,9 @@ public class PolylineDecoder {
     }
 
 
-    private static List<Coordinate> filterLongSegments(List<Coordinate> coordinates) {
-        List<Coordinate> filteredCoordinates = new ArrayList<>();
-        if (coordinates.isEmpty()) {
-            return filteredCoordinates;
-        }
-
-        filteredCoordinates.add(coordinates.get(0));
-
-        for (int i = 1; i < coordinates.size(); i++) {
-            Coordinate previous = filteredCoordinates.get(filteredCoordinates.size() - 1);
-            Coordinate current = coordinates.get(i);
-            double distance = haversineDistance(previous.getLatitude(), previous.getLongitude(), current.getLatitude(), current.getLongitude());
-            System.out.printf("Distance from [%f, %f] to [%f, %f]: %f km%n",
-                    previous.getLatitude(), previous.getLongitude(),
-                    current.getLatitude(), current.getLongitude(),
-                    distance);
-            if (distance <= DISTANCE_THRESHOLD) {
-                filteredCoordinates.add(current);
-            } else {
-                System.out.println("Skipping segment from " + previous + " to " + current + " due to long distance: " + distance + " km");
-            }
-        }
-
-        return filteredCoordinates;
-    }
-
-    private static double haversineDistance(double lat1, double lon1, double lat2, double lon2) {
-        final int R = 6371; // radius of earth
 
 
-        double lat1Rad = Math.toRadians(lat1);
-        double lon1Rad = Math.toRadians(lon1);
-        double lat2Rad = Math.toRadians(lat2);
-        double lon2Rad = Math.toRadians(lon2);
 
-
-        System.out.printf("Lat1: %f, Lon1: %f, Lat2: %f, Lon2: %f%n", lat1, lon1, lat2, lon2);
-        System.out.printf("Lat1 (rad): %f, Lon1 (rad): %f, Lat2 (rad): %f, Lon2 (rad): %f%n", lat1Rad, lon1Rad, lat2Rad, lon2Rad);
-
-
-        double dLat = lat2Rad - lat1Rad;
-        double dLon = lon2Rad - lon1Rad;
-
-
-        System.out.printf("dLat: %f, dLon: %f%n", dLat, dLon);
-
-
-        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                Math.cos(lat1Rad) * Math.cos(lat2Rad) *
-                        Math.sin(dLon / 2) * Math.sin(dLon / 2);
-        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        double distance = R * c;
-
-
-        System.out.printf("a: %f, c: %f, Distance: %f km%n", a, c, distance);
-
-        return distance;
-    }
     public static void main(String[] args) {
 
         String jsonString = "[\"wbgeIjytOPiCQE@LCVW|CILC?MCM|AARYvCq@`FD?RN@XLdA^tERhCUNy@T\","

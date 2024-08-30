@@ -20,6 +20,7 @@ module com.project.busfinder {
     requires com.sothawo.mapjfx;
     requires com.google.gson;
     requires java.management;
+    requires java.desktop;
 
     opens com.project.busfinder to javafx.fxml;
     exports com.project.busfinder;
@@ -29,7 +30,7 @@ module com.project.busfinder {
     opens com.project.busfinder.helperFunctions to javafx.fxml;
     exports com.project.busfinder.GUI;
     opens com.project.busfinder.GUI to javafx.fxml;
-    exports com.project.busfinder.Mapping;
-    opens com.project.busfinder.Mapping to javafx.fxml;
+    exports com.project.busfinder.Mapping_util;
+    opens com.project.busfinder.Mapping_util to javafx.fxml;
 
 }

@@ -1,18 +1,21 @@
 package com.project.busfinder.util;
 
 import java.net.URI;
+import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.io.IOException;
 import java.io.StringReader;
-import java.util.AbstractMap;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.Set;
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeParseException;
+import java.util.*;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 
+import com.project.busfinder.Mapping_util.LiveRouteInfo;
 import com.project.busfinder.helperFunctions.ReadFromDatabase;
 import com.project.busfinder.helperFunctions.SiriNamespaceContext;
 import org.w3c.dom.Document;
@@ -31,35 +34,59 @@ public class readLiveLocation {
 
     public static void main(String[] args) {
         try {
-            fetchAndProcessResponse();
-        } catch (Exception e) {
-            System.err.println("Error during API fetch and process: " + e.getMessage());
+
+            List<LiveRouteInfo> lineAndJourneyRefs = processXmlResponse(fetchAndProcessResponse());
+            System.out.println(lineAndJourneyRefs);
+
+
+        } catch (IOException | InterruptedException e) {
             e.printStackTrace();
         }
     }
 
     public static String fetchAndProcessResponse() throws IOException, InterruptedException {
         HttpClient client = HttpClient.newHttpClient();
-        String parameters = "api_key=" + API_KEY + "&operatorRef=AMSY"; //AMSY being the operator ref for Arriva merseyside
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(Posts_API_URL + "?" + parameters))
-                .header("accept", "*/*")
-                .build();
+        String parameters = "api_key=" + API_KEY + "&operatorRef=AMSY"; // AMSY being the operator ref for Arriva Merseyside
 
-        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-        if (response.statusCode() == 200) {
-            processXmlResponse(response.body());
-            //System.out.println(response.body());
-            return response.body();
-        } else {
-            System.out.println("Failed to get a valid response. Status Code: " + response.statusCode());
-            return null;
+        // retry 3 times
+        int maxRetries = 3;
+        int attempt = 0;
+        String responseBody = null;
+
+        while (attempt < maxRetries) {
+            attempt++;
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(Posts_API_URL + "?" + parameters))
+                    .header("accept", "*/*")
+                    .build();
+
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() == 200) {
+                responseBody = response.body();
+                //System.out.println(responseBody);
+                List<LiveRouteInfo> liveRoutes = processXmlResponse(responseBody);
+
+                if (!liveRoutes.isEmpty()) {
+
+                    return responseBody;
+                } else {
+                    System.out.println("No live routes found, retrying... (Attempt " + attempt + ")");
+                }
+            } else {
+                System.out.println("Failed to get a valid response. Status Code: " + response.statusCode());
+            }
+            Thread.sleep(1000);
         }
+
+        System.out.println("Failed to fetch valid data after " + maxRetries + " attempts.");
+        return null;
     }
 
-    public static ArrayList<AbstractMap.SimpleEntry<String, String>> processXmlResponse(String xml) throws IOException, InterruptedException {
+    public static List<LiveRouteInfo> processXmlResponse(String xml) throws IOException, InterruptedException {
         ArrayList<AbstractMap.SimpleEntry<String, String>> liveRoutes = new ArrayList<>();
         ArrayList<String> dbRoutes = ReadFromDatabase.readRoutes();
+        List<LiveRouteInfo> routeInfoList = new ArrayList<>();
         try {
             DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
             dbFactory.setNamespaceAware(true);
@@ -72,34 +99,50 @@ public class readLiveLocation {
 
             NodeList vehicleActivities = (NodeList) xpath.evaluate("//siri:VehicleActivity", doc, XPathConstants.NODESET);
             int count = 0;
+
+            LocalDateTime now = LocalDateTime.now();
+
             for (int i = 0; i < vehicleActivities.getLength(); i++) {
                 Element vehicleActivity = (Element) vehicleActivities.item(i);
-                String recordedAtTime = xpath.evaluate(".//siri:RecordedAtTime", vehicleActivity);
-                String operatorRef = xpath.evaluate(".//siri:OperatorRef", vehicleActivity);
-                String latitude = xpath.evaluate(".//siri:Latitude", vehicleActivity);
-                String longitude = xpath.evaluate(".//siri:Longitude", vehicleActivity);
                 String line_ref = xpath.evaluate(".//siri:LineRef", vehicleActivity);
                 String journeyRef = xpath.evaluate(".//siri:DatedVehicleJourneyRef", vehicleActivity);
+                String originAimedDepartureTime = xpath.evaluate(".//siri:OriginAimedDepartureTime", vehicleActivity);
+                String destinationAimedArrivalTime = xpath.evaluate(".//siri:DestinationAimedArrivalTime", vehicleActivity);
+                String latitudeStr = xpath.evaluate(".//siri:Latitude", vehicleActivity);
+                String longitudeStr = xpath.evaluate(".//siri:Longitude", vehicleActivity);
 
-                // some journeyRefs are returning as a 5000 instead of 1000, ex: 62=5044. This is erroneus and should be 1044
-                // Adjust journeyRef if it does not start with '1'
-                //if (!journeyRef.startsWith("1")) {
-                    //journeyRef = "1" + journeyRef.substring(1);
-                //}
-
-                if (dbRoutes.contains(line_ref)) {
-                    liveRoutes.add(new AbstractMap.SimpleEntry<>(line_ref, journeyRef));
+                if (originAimedDepartureTime == null || originAimedDepartureTime.isEmpty() ||
+                        destinationAimedArrivalTime == null || destinationAimedArrivalTime.isEmpty()) {
+                    System.out.println("Skipping entry due to missing time fields.");
+                    continue;  // skip if times are missing
                 }
-                //System.out.printf("Route %s, latitude: %s, longitude: %s, Journey ref : %s\n", line_ref, latitude, longitude, journeyRef);
-                count++;
+
+                double latitude = Double.parseDouble(latitudeStr);
+                double longitude = Double.parseDouble(longitudeStr);
+
+                try {
+
+                    LocalDateTime departureTime = OffsetDateTime.parse(originAimedDepartureTime).toLocalDateTime();
+                    LocalDateTime arrivalTime = OffsetDateTime.parse(destinationAimedArrivalTime).toLocalDateTime();
+
+                    // check if the journey times are within the current time
+                    if (departureTime.isBefore(now) && arrivalTime.isAfter(now)) {
+                        if (dbRoutes.contains(line_ref)) {
+                            liveRoutes.add(new AbstractMap.SimpleEntry<>(line_ref, journeyRef));
+                            routeInfoList.add(new LiveRouteInfo(line_ref, journeyRef, latitude, longitude));
+                        }
+                        count++;
+                    }
+                } catch (DateTimeParseException e) {
+                    System.out.println("Error parsing date-time fields: " + e.getMessage());
+                }
             }
         } catch (Exception e) {
-           // System.out.println("Error parsing XML: " + e.getMessage());
+            System.out.println("Error parsing XML: " + e.getMessage());
         }
-        // some journeyRefs are returning as a 5000 instead of 1000, ex: 62=5044. This is erroneus and should be 1044
-        System.out.println(liveRoutes);
-        return liveRoutes;
-    }
 
+        System.out.println("Filtered live routes: " + liveRoutes);
+        return routeInfoList;
+    }
 
 }

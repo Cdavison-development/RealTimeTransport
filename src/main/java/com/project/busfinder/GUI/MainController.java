@@ -1,77 +1,27 @@
 package com.project.busfinder.GUI;
 
 
-import com.gluonhq.maps.MapLayer;
-import com.gluonhq.maps.MapPoint;
 //import com.gluonhq.maps.MapView;
-import com.project.busfinder.Mapping.*;
-import com.project.busfinder.util.CoordinateConverter;
-import com.project.busfinder.util.PolylineDecoder;
-import com.project.busfinder.util.ResourceMonitor;
-import com.sothawo.mapjfx.*;
-import com.sothawo.mapjfx.event.MapViewEvent;
-import javafx.animation.KeyFrame;
-import javafx.animation.Timeline;
-import javafx.animation.TranslateTransition;
-import javafx.application.Platform;
-import javafx.event.ActionEvent;
+import com.project.busfinder.Mapping_util.*;
+        import com.sothawo.mapjfx.*;
+        import javafx.animation.TranslateTransition;
+        import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
+import javafx.scene.Parent;
+import javafx.scene.control.ProgressIndicator;
 import javafx.scene.layout.AnchorPane;
 import javafx.scene.layout.VBox;
 
 import javafx.util.Duration;
 import javafx.scene.layout.*;
 import java.io.IOException;
-import java.sql.SQLException;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.stream.Collectors;
+        import java.util.List;
 
-import com.sothawo.mapjfx.event.MarkerEvent;
-
-import static com.project.busfinder.Mapping.simulateBusLocations.*;
+        import static com.project.busfinder.util.readLiveLocation.fetchAndProcessResponse;
+import static com.project.busfinder.util.readLiveLocation.processXmlResponse;
 
 
-//TODO: allow user to click on bus for live tracking and route details. same for searching from the side bar.
-// remove completed bus routes/ add new bus routes
-//
-// if the user wants to simulate a bus route, it may be better, and easier, to just re-render all objects
-// and simulate as if the time the simulated bus route begins is this current time.
-
-/**
- *  Things to remember since most recent push (14/08/24)
- *
- *  classes to be handled with new datasets
- *
- *
- * getLive routes function in getRoutes Class and its getter class
- *
- *
- * all functions in simulate BusLocation
- *
- * add a day component to track bus panel.
- * return the chosen item
- *
- * This will be used to specify what routes table we use
- *
- * following this, any function that calls any of the above
- *
- * mapActive buses needs to take a day parameter
- *
- * if buses are showing signs of being late, switch to live tracking.
- *
- * if the slected day allows live tracking, switch to live tracking on day selection
- *
- * rather than resetting the marker list on re-rendering of buses, marker list does not completely reset.
- * performing multiple renders does not return render list to 0
- */
 public class MainController {
     @FXML
     private VBox sidePanel;
@@ -93,12 +43,14 @@ public class MainController {
     private boolean isPanelOpen = false;
 
     private BusIconController busIconController;
+    private stopsPanelController stopsPanelController;
+    private TrackBusPanelController trackBusPanelController;
     private RouteService routeService;
 
     private final String markerImagePath = "/com/project/busfinder/GUI/images/bus3.png";
     private CoordinateLine coordinateLine;
 
-
+    private ProgressIndicator progressIndicator;
 
     public MainController() {
 
@@ -115,31 +67,45 @@ public class MainController {
                 .build();
         mapView.initialize(configuration);
 
+        // loading icon used when searching for bus
+        ProgressIndicator progressIndicator = new ProgressIndicator();
+        progressIndicator.setPrefSize(200, 200);
+        progressIndicator.setVisible(false);  // initially hidden
+        AnchorPane.setTopAnchor(progressIndicator, 10.0);
+        AnchorPane.setRightAnchor(progressIndicator, 10.0);
+        anchorPane.getChildren().add(progressIndicator);
+
+        setupPanels();
         // add a listener to execute code once the map view is fully initialised
         mapView.initializedProperty().addListener((observable, oldValue, newValue) -> {
             if (newValue) {
                 // initialise the bus icon controller with the map view
                 busIconController = new BusIconController(mapView);
+                busIconController.setMainController(this);
+                busIconController.setProgressIndicator(progressIndicator);
                 busIconController.initializeMap();
-
+                if (trackBusPanelController != null) {
+                    busIconController.setTrackBusPanelController(trackBusPanelController);
+                    stopsPanelController.setUseLiveRoutes(trackBusPanelController.getUseLiveRoutes());
+                }
                 // map active buses after the map is ready
                 try {
-                    LocalDate date = LocalDate.of(2024, 8, 18); // Example date (for "Sunday")
-                    LocalTime testTime = LocalTime.of(8, 4, 0); // Example time
+                    // get live route information
+                    String xmlResponse = fetchAndProcessResponse();
+                    if (xmlResponse != null) {
+                        List<LiveRouteInfo> liveRouteInfoList = processXmlResponse(xmlResponse);
 
-
-                    LocalDateTime testDateTime = LocalDateTime.of(date, testTime);
-
-
-                    busIconController.mapActiveBuses("Sunday", testDateTime, 5, null,null); // initialise after the map is ready
-                } catch (IOException | InterruptedException | SQLException e) {
-                    throw new RuntimeException(e); // handle exceptions by throwing a runtime exception
+                        // call method with the updated list
+                        busIconController.startBusMovementUpdate(null, liveRouteInfoList,true);
+                    } else {
+                        System.out.println("Failed to fetch live route data.");
+                    }
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
                 }
             }
         });
 
-        // set up any additional panels or UI components
-        setupPanels();
     }
 
 
@@ -176,8 +142,14 @@ public class MainController {
             } else if ("/com/project/busfinder/GUI/trackBusPanel.fxml".equals(fxmlFile)) {
                 TrackBusPanelController trackBusPanelController = loader.getController();
                 trackBusPanelController.setMainController(this);
-            }
+                this.trackBusPanelController = trackBusPanelController;
+                busIconController.setTrackBusPanelController(trackBusPanelController);
+            } else if ("/com/project/busfinder/GUI/routeDetailsPanel.fxml".equals(fxmlFile)) {
+                stopsPanelController stopsPanelController = loader.getController();
+                stopsPanelController.setMainController(this);
+                this.stopsPanelController = stopsPanelController;
 
+            }
             // replace the existing content of the side panel with the new content
             sidePanel.getChildren().clear();
             sidePanel.getChildren().add(newSidePanel);
@@ -226,5 +198,7 @@ public class MainController {
     private void loadTrackBusPanel(ActionEvent event) {
         loadSidePanel("/com/project/busfinder/GUI/trackBusPanel.fxml");
     }
-
+    public stopsPanelController getStopsPanelController() {
+        return stopsPanelController;
+    }
 }

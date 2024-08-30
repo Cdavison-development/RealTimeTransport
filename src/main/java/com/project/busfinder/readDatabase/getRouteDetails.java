@@ -52,7 +52,10 @@ public class getRouteDetails {
     public List<JourneyRouteInfo> getFirstStopInfo(String routeId, String day) throws SQLException {
         // determine the table name based on the day parameter
         String tableName = getTableNameForDay(day);
-
+        if (tableName == null) {
+            throw new IllegalArgumentException("Invalid table name for day: " + day);
+        }
+        System.out.println("Using table: " + tableName);
         // query to get information about the first stop for each journey
         String query = """
         SELECT 
@@ -134,13 +137,24 @@ public class getRouteDetails {
     }
 
     private String getTableNameForDay(String day) {
-        switch (day) {
+        String formattedDay = day.substring(0, 1).toUpperCase() + day.substring(1).toLowerCase();
+        switch (formattedDay) {
             case "Saturday":
                 return "saturday_routes";
             case "Sunday":
                 return "sunday_routes";
+            case "Monday":
+                return "monday_routes";
+            case "Tuesday":
+                return "tuesday_routes";
+            case "Wednesday":
+                return "wednesday_routes";
+            case "Thursday":
+                return "thursday_routes";
+            case "Friday":
+                return "friday_routes";
             default:
-                return "weekday_routes";
+                throw new IllegalArgumentException("Invalid day of the week: " + day);
         }
     }
     public static class JourneyRouteInfo {

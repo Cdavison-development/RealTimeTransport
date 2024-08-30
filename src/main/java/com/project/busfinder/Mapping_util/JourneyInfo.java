@@ -1,7 +1,6 @@
-package com.project.busfinder.Mapping;
+package com.project.busfinder.Mapping_util;
 
 import java.time.LocalTime;
-import java.util.List;
 
 public class JourneyInfo {
     private final String vehicleJourneyCode;
