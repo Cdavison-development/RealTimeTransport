@@ -7,9 +7,13 @@ import java.util.Iterator;
 public class SiriNamespaceContext implements NamespaceContext {
     @Override
     public String getNamespaceURI(String prefix) {
+
+        // return the namespace URI associated with the "siri" prefix
         if ("siri".equals(prefix)) {
             return "http://www.siri.org.uk/siri";
         }
+        // return the null namespace URI for any other prefix
+
         return XMLConstants.NULL_NS_URI;
     }
 

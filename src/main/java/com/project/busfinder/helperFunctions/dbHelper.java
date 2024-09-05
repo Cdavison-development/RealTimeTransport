@@ -21,9 +21,15 @@ public class dbHelper {
         ArrayList<String> routes = new ArrayList<>();
 
         try {
+
+            // initialise the document builder to parse the XML data
+
             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
             DocumentBuilder builder = factory.newDocumentBuilder();
             Document doc = builder.parse(new ByteArrayInputStream(xmlData.getBytes()));
+
+
+            // extract all elements with the tag "LineRef" and add their text content to the routes list
 
             NodeList lineRefNodes = doc.getElementsByTagName("LineRef");
             for (int i = 0; i < lineRefNodes.getLength(); i++) {
@@ -31,7 +37,9 @@ public class dbHelper {
                 routes.add(lineRefElement.getTextContent());
             }
         } catch (Exception e) {
-            e.printStackTrace();
+
+            e.printStackTrace(); // handle exceptions by printing the stack trace
+
         }
 
         return routes;
