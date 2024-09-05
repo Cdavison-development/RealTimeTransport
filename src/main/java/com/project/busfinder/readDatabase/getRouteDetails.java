@@ -30,6 +30,15 @@ public class getRouteDetails {
         }
     }
 
+    /**
+     *
+     *  gets info on the first and last stops for a bus journey
+     *
+     * @param routeId stop info for this routeID is found
+     * @param day the journey a bus takes can differentiate based on day, so needs specifying.
+     * @return updated list with first and last stop info
+     * @throws SQLException
+     */
     public List<JourneyRouteInfo> getJourneyRouteInfo(String routeId, String day) throws SQLException {
         // get information about the first stops on the route
         List<JourneyRouteInfo> firstStopInfo = getFirstStopInfo(routeId, day);
@@ -49,6 +58,18 @@ public class getRouteDetails {
         return firstStopInfo;  // return the updated list with first and last stop info
     }
 
+    /**
+     *
+     * gets information about the first stop for each journey on a given route and day.
+     * queries database to find earlies departure time for each journey pattern and journeyCode combination from provided routeID
+     * and day
+     *
+     *
+     * @param routeId ID of the route that we are retrieving stop information for
+     * @param day day of the week to specify which table to take from
+     * @return list of journeyRouteInfo objects containing the first stop info for each journey
+     * @throws SQLException
+     */
     public List<JourneyRouteInfo> getFirstStopInfo(String routeId, String day) throws SQLException {
         // determine the table name based on the day parameter
         String tableName = getTableNameForDay(day);
@@ -94,6 +115,19 @@ public class getRouteDetails {
         return results;  // return the list of journey route info for the first stops
     }
 
+    /**
+     *
+     * gets information about the last stop for each journey on a given route and day.
+     * queries database to find the latest departure time for each journey pattern and journeyCode combination from provided routeID
+     * and day
+     *
+     *
+     * @param routeId ID of the route that we are retrieving stop information for
+     * @param day day of the week to specify which table to take from
+     * @return list of journeyRouteInfo objects containing the first stop info for each journey
+     * @throws SQLException
+     */
+
     public List<JourneyRouteInfo> getLastStopInfo(String routeId, String day) throws SQLException {
         // determine the table name based on the day parameter
         String tableName = getTableNameForDay(day);
@@ -136,6 +170,12 @@ public class getRouteDetails {
         return results;  // return the list of journey route info for the last stops
     }
 
+    /**
+     *
+     * gets table name to read data from for a given day
+     * @param day
+     * @return
+     */
     private String getTableNameForDay(String day) {
         String formattedDay = day.substring(0, 1).toUpperCase() + day.substring(1).toLowerCase();
         switch (formattedDay) {
@@ -157,6 +197,13 @@ public class getRouteDetails {
                 throw new IllegalArgumentException("Invalid day of the week: " + day);
         }
     }
+
+
+    /**
+     *
+     * getter and setter class to access private variables.
+     *
+     */
     public static class JourneyRouteInfo {
         private final String journeyPatternRef;
         private final String vehicleJourneyCode;

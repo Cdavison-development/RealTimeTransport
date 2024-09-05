@@ -23,8 +23,11 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javafx.application.Platform;
+import javafx.util.Pair;
 
 import static com.project.busfinder.Mapping_util.simulateBusLocations.getJourneyLegs;
 import static com.project.busfinder.Mapping_util.simulateBusLocations.getVehicleJourneyCode;
@@ -36,17 +39,6 @@ import static com.project.busfinder.util.readLiveLocation.processXmlResponse;
 /**
  *
  * testing errors:
- *
- * re-render routes and departure time combos when going between weekdays/ sat / sun - kinda fixed, combobox prompt text disappears tho
- *
- *  change cursor to indicate hover on hover
- *
- *
- * track live isnt set up to handle two routes of the same route ID
- *
- * handle UI change when swapping between non-live and live days
- *
- * add plan route func
  */
 public class TrackBusPanelController {
 
@@ -87,13 +79,16 @@ public class TrackBusPanelController {
     @FXML
     private MapView mapView;
     private Task<Void> activeBusTask = null;
-
+    private Timeline activeTimeline;
     private String lastSelectedDay = null;
 
     private String selectedRouteName;
     private String selectedVehicleJourneyCode;
     private String selectedDay;
     private boolean useLiveRoutes = true;
+    private Task<Void> activeTask;
+    private int timeWindow = 3;
+
     @FXML
     private void initialize() {
         // initialise the database connection
@@ -109,8 +104,8 @@ public class TrackBusPanelController {
             String selectedDay = getDay();
             System.out.println("Selected Day: " + selectedDay);
 
-            // only repopulate if the selected day is different from the last selected day
-            if (selectedDay != null && (!isWeekday(selectedDay) || lastSelectedDay == null || !isWeekday(lastSelectedDay))) {
+            // repopulate if new day chosen
+            if (selectedDay != null ) {
                 System.out.println("Switching between weekday and weekend");
                 populateRoutesComboBox();
                 routesComboBox.setVisible(true);
@@ -158,40 +153,56 @@ public class TrackBusPanelController {
         }
         return selectedDay.split(" \\(")[0];
     }
-    private boolean isWeekday(String day) {
-        if (day == null) {
-            return false;
-        }
-        return day.equals("Monday") || day.equals("Tuesday") || day.equals("Wednesday") ||
-                day.equals("Thursday") || day.equals("Friday");
-    }
+
+    /**
+     *
+     * queries getLiveRoutes, and returns all live routes and VJCs at a certain moment,
+     * specifying if live tracking is available at that point
+     *
+     *
+     */
     private void populateRoutesComboBox() {
         List<String> routeLabels = new ArrayList<>();
+        Set<String> addedRoutes = new HashSet<>();
         try {
             // get day
             DayOfWeek currentDay = LocalDate.now().getDayOfWeek();
             String currentDayString = currentDay.toString();
 
             // get list of active routes
-            Map<String, Boolean> liveRoutes = getLiveRoutes(conn);
+            Map<String, List<Pair<Boolean, String>>> liveRoutes = getLiveRoutes(conn);
 
-            for (Map.Entry<String, Boolean> entry : liveRoutes.entrySet()) {
+            for (Map.Entry<String, List<Pair<Boolean, String>>> entry : liveRoutes.entrySet()) {
                 String route = entry.getKey();
-                Boolean isLive = entry.getValue();
+                List<Pair<Boolean, String>> liveInfoList = entry.getValue();
+                boolean routeAdded = false;
+                for (Pair<Boolean, String> liveInfo : liveInfoList) {
+                    Boolean isLive = liveInfo.getKey();
+                    String vjc = liveInfo.getValue();
+                    // mark each route with whether it's got live tracking and/or just simulated
+                    String label;
 
-                // mark each route with whether it's got live tracking or just simulated.
-                String label;
-                if (isLive && getDay().equalsIgnoreCase(currentDayString)) {
-                    label = route + " - Live tracking available";
-                } else {
-                    label = route + " - simulated tracking available";
+                    if (isLive && getDay().equalsIgnoreCase(currentDayString)) {
+                        label = route + " - Live tracking available";
+                    } else {
+                        label = route + " - simulated tracking available";
+                    }
+
+                    if (!addedRoutes.contains(label)) {
+                        System.out.println("Route: " + route + " | Live: " + isLive + " | VJC: " + vjc);
+                        System.out.println(label);
+                        routeLabels.add(label);
+                        addedRoutes.add(label);
+                        routeAdded = true;
+                    }
                 }
-
-                System.out.println(label);
-                // add to dropdown
-                routeLabels.add(label);
+                if (!routeAdded && !addedRoutes.contains(route + " - simulated tracking available")) {
+                    String simulatedLabel = route + " - simulated tracking available";
+                    System.out.println(simulatedLabel);
+                    routeLabels.add(simulatedLabel);
+                    addedRoutes.add(simulatedLabel);
+                }
             }
-
             // Sort the list of route labels
             routeLabels.sort(String::compareToIgnoreCase);
 
@@ -251,26 +262,36 @@ public class TrackBusPanelController {
             }
         }
     }
+
     private void chooseDay() {
         // Get the selected day
         String selectedDay = dayComboBox.getValue();
         System.out.println("chooseDay() called. Selected Day: " + selectedDay); // Debugging
 
+        if (dayComboBox.getValue().contains("Live")) {
+            RendertimeComboBox.setVisible(false);
+        }
         if (selectedDay != null) {
             Platform.runLater(() -> {
-                System.out.println("Setting routesComboBox to visible"); // Debugging
+                System.out.println("Setting routesComboBox to visible");
                 routesComboBox.setVisible(true);
             });
         }
+        RendertimeComboBox.getItems().clear();
+        RendertimeComboBox.setVisible(true);
     }
 
-    // we need to lock onto the specific bus chosen, and map all buses that would be active at the same time
-    //lock onto the specific bus by returning route_id and journey. return time so we can find time it would be mapped.
+    /**
+     * handles the selection of a route and prepares the departure time options accordingly
+     * populates departure time cobo box based on selected route and day
+     * if live tracking available for the selected route, the option to track live is added
+     * always populates simulated routes, despite whether track live is true or not
+     *
+     *
+     */
     private void chooseRoute() {
-
         chooseDay();
         departureTimeComboBox.getItems().clear();
-
         departureTimeComboBox.setPromptText("Select a departure time");
 
         if (routesComboBox.isVisible() && dayComboBox.getValue() != null) {
@@ -282,97 +303,177 @@ public class TrackBusPanelController {
             if (selectedRoute != null) {
                 departureTimeComboBox.setVisible(true);
 
-            // extract the route name from the selected route
-            String routeName = extractRouteName(selectedRoute);
+                // extract the route name from the selected route
+                String routeName = extractRouteName(selectedRoute);
 
-            try {
-                    // create an instance of getRouteDetails to fetch route information
-                    getRouteDetails fetcher = new getRouteDetails(conn);
+                try {
+                    // get the live routes with VJCs
+                    Map<String, List<Pair<Boolean, String>>> liveRoutes = getLiveRoutes(conn);
 
-                    // clear the previous items in the departure time combo box
-                    departureTimeComboBox.getItems().clear();
+                    List<Pair<Boolean, String>> liveInfoList = liveRoutes.get(routeName);
 
-                    List<getRouteDetails.JourneyRouteInfo> routeInfoList;
+                    boolean hasLiveTracking = false;
 
-
-                    if (selectedRoute.contains("Live") && dayComboBox.getValue().contains("Live")) {
-                        departureTimeComboBox.getItems().add("Track Live");
-                        System.out.println("track live true");
-                        DayOfWeek dayOfWeek = LocalDate.now().getDayOfWeek();
-                        routeInfoList = fetcher.getJourneyRouteInfo(routeName, String.valueOf(dayOfWeek));
-                    } else {
-                        routeInfoList = fetcher.getJourneyRouteInfo(routeName, getDay());
-                        RendertimeComboBox.setVisible(true);
-                    }
-
-                    System.out.println("Number of routes found: " + routeInfoList.size());
-
-                // populate the combo box with the journey route information
-                for (getRouteDetails.JourneyRouteInfo info : routeInfoList) {
-                    // lookup stop names
-                    String firstFromStopName = StopName(info.getFirstFromStop());
-                    String lastToStopName = StopName(info.getLastToStop());
-
-                    // format the earliest departure time
-                    String formattedDepartureTime = info.getEarliestDepartureDateTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
-
-                    // Construct the item string for the combo box
-                    String item = String.format("%s -> %s at %s (%s) ",
-                            firstFromStopName,
-                            lastToStopName,
-                            formattedDepartureTime,
-                            info.getVehicleJourneyCode());
-
-                    // Add the item to the combo box
-                    departureTimeComboBox.getItems().add(item);
-                }
-
-                    // set prompt text
-                    if (!routeInfoList.isEmpty()) {
-                        departureTimeComboBox.setPromptText("Select Departure Time");
-                        departureTimeComboBox.getSelectionModel().selectFirst();
-                    }
-                    departureTimeComboBox.setPromptText("Select Departure Time");
-
-                    System.out.println("Items in Departure Time ComboBox: " + departureTimeComboBox.getItems().size());
-
-                // set an action listener for the departure time combo box, populate
-                // RenderTime combo box on action
-                departureTimeComboBox.setOnAction(event -> {
-                    String selectedItem = departureTimeComboBox.getValue();
-                    if (selectedItem != null) {
-                        String vehicleJourneyCode = handleDepartureTimeSelection(selectedItem, routeName);
-                        try {
-                            populateRouteTimes(routeName, vehicleJourneyCode, getDay());
-                        } catch (SQLException e) {
-                            throw new RuntimeException(e);
+                    // if live routes are avilable, add track live option.
+                    if (liveInfoList != null && !liveInfoList.isEmpty()) {
+                        for (Pair<Boolean, String> liveInfo : liveInfoList) {
+                            Boolean isLive = liveInfo.getKey();
+                            if (isLive && getDay().equalsIgnoreCase(LocalDate.now().getDayOfWeek().toString())) {
+                                departureTimeComboBox.getItems().add("Track Live");
+                                System.out.println("Track live available for route: " + routeName);
+                                hasLiveTracking = true;
+                                break;
+                            }
                         }
                     }
-                });
-                routesComboBox.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
-                    System.out.println("Route ComboBox changed. Old Value: " + oldValue + ", New Value: " + newValue);
-                    // re-run function when choice changes
-                    chooseRoute();
-                });
 
-                RendertimeComboBox.setPromptText("Choose bus stop");
+                    // add simulated routes in all cases, user may want to check a simulated route, even on a live tracking day
+                    populateSimulatedRoutes(routeName);
 
-                   try {
-                        String vehicleJourneyCode = handleDepartureTimeSelection(departureTimeComboBox.getValue(), routeName);
-                        populateRouteTimes(routeName, vehicleJourneyCode, getDay());
-                    } catch (SQLException e) {
-                        throw new RuntimeException(e);
+                    // set prompt text
+                    if (!departureTimeComboBox.getItems().isEmpty()) {
+                        departureTimeComboBox.setPromptText("Select Departure Time");
+                    } else {
+                        departureTimeComboBox.setPromptText("No available departure times");
                     }
 
-                } catch (SQLException e) {
+                    // set up action listener for the departure time combo box
+                    departureTimeComboBox.setOnAction(event -> {
+                        String selectedItem = departureTimeComboBox.getValue();
+                        if (selectedItem != null) {
+                            if (selectedItem.equals("Track Live")) {
+                                // if "Track Live" is selected, populate VJCs for the live route
+                                try {
+                                    populateVJCForLiveRoute(routeName, liveInfoList);
+                                } catch (SQLException e) {
+                                    e.printStackTrace();
+                                }
+                            } else {
+                                RendertimeComboBox.getItems().clear();
+                                String vehicleJourneyCode = handleDepartureTimeSelection(selectedItem, routeName);
+                                try {
+                                    populateRouteTimes(routeName, vehicleJourneyCode, getDay());
+                                } catch (SQLException e) {
+                                    throw new RuntimeException(e);
+                                }
+                            }
+                        }
+                    });
+
+                } catch (SQLException | IOException | InterruptedException e) {
                     e.printStackTrace();
                     System.err.println("Failed to fetch route information.");
                 }
             } else {
-                showAlert("Selection Warning", "Please select a route.");
             }
         }
     }
+
+    /**
+     *
+     * populates RenderTimeCombo box with all bus stops the user can start simulation from
+     *
+     *
+     * @param routeName
+     * @throws SQLException
+     */
+    private void populateSimulatedRoutes(String routeName) throws SQLException {
+        RendertimeComboBox.getItems().clear();
+        getRouteDetails fetcher = new getRouteDetails(conn);
+        List<getRouteDetails.JourneyRouteInfo> routeInfoList = fetcher.getJourneyRouteInfo(routeName, getDay());
+
+        for (getRouteDetails.JourneyRouteInfo info : routeInfoList) {
+            // get stop names
+            String firstFromStopName = StopName(info.getFirstFromStop());
+            String lastToStopName = StopName(info.getLastToStop());
+
+            // format earliest departure time
+            String formattedDepartureTime = info.getEarliestDepartureDateTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+
+            // construct the item string for the combo box
+            String item = String.format("%s -> %s at %s (%s) ",
+                    firstFromStopName,
+                    lastToStopName,
+                    formattedDepartureTime,
+                    info.getVehicleJourneyCode());
+
+            // add item to combo box
+            departureTimeComboBox.getItems().add(item);
+        }
+    }
+
+    /**
+     *
+     * populates RenderTime combo box with the different current live routes.
+     *
+     *
+     * @param routeName
+     * @param liveInfoList
+     * @throws SQLException
+     */
+    private void populateVJCForLiveRoute(String routeName, List<Pair<Boolean, String>> liveInfoList) throws SQLException {
+        RendertimeComboBox.getItems().clear();
+        RendertimeComboBox.setVisible(true);
+        if (liveInfoList != null) {
+            getRouteDetails fetcher = new getRouteDetails(conn);
+
+            for (Pair<Boolean, String> liveInfo : liveInfoList) {
+
+                Boolean isLive = liveInfo.getKey();
+                String vjc = liveInfo.getValue();
+
+                vjcAndDay patternData = null;
+                try {
+                    patternData = getVehicleJourneyCode(routeName, vjc);
+                } catch (SQLException e) {
+                    throw new RuntimeException(e);
+                }
+
+                System.out.println("isLive: " + isLive);
+                System.out.println("journeyCode: " + vjc);
+                vjc = patternData.getVehicleJourneyCode();
+                System.out.println("vjc: " + vjc);
+                if (isLive && vjc != null) {
+                    // get data for ensuring that  RenderTimesCombo box text is user friendly
+                    List<getRouteDetails.JourneyRouteInfo> routeInfoList = fetcher.getJourneyRouteInfo(routeName, getDay());
+
+                    for (getRouteDetails.JourneyRouteInfo info : routeInfoList) {
+                        if (info.getVehicleJourneyCode().equals(vjc)) {
+                            // get stop names
+                            String firstFromStopName = StopName(info.getFirstFromStop());
+                            String lastToStopName = StopName(info.getLastToStop());
+
+                            // format  earliest departure time
+                            String formattedDepartureTime = info.getEarliestDepartureDateTime().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
+
+                            // construct the item string for the combo box
+                            String displayText = String.format("From %s to %s (%s)",
+                                    firstFromStopName,
+                                    lastToStopName,
+                                    //formattedDepartureTime,
+                                    vjc);
+
+                            // add item to combo box
+                            RendertimeComboBox.getItems().add(displayText);
+                            break; // dont need to continue loop since we found the matching VJC
+                        }
+                    }
+                }
+            }
+
+            if (RendertimeComboBox.getItems().isEmpty()) {
+                RendertimeComboBox.setPromptText("No Live VJCs available");
+            } else {
+                RendertimeComboBox.setVisible(true);
+                RendertimeComboBox.setPromptText("Select Vehicle Journey Code");
+            }
+        } else {
+            RendertimeComboBox.setPromptText("No Live VJCs available");
+        }
+    }
+    // selecting stops within the range of timeWindow from 00:00 break the system, so we just make these unavailable. if the user
+    //wants to see these stops they can render a stop slightly outside the range and wait.
+    // also make the final stop unavailable as by this time the bus is removed and nothing is plotted anyway.
     public void populateRouteTimes(String routeId, String vehicleJourneyCode, String day) throws SQLException {
             RendertimeComboBox.getItems().clear();
             RendertimeComboBox.setPromptText("Choose bus stop");
@@ -380,11 +481,27 @@ public class TrackBusPanelController {
             List<JourneyLeg> journeyLegs = getJourneyLegs(routeId, vehicleJourneyCode, day);
             System.out.println("loadStopTimes journeyLegs: " + journeyLegs);
 
+            LocalTime windowStart = LocalTime.of(23, 59).minusMinutes(timeWindow);
+            LocalTime windowEnd = LocalTime.of(0, 0).plusMinutes(timeWindow);
+
+
         // convert the journey legs to strings for display in the ListView
             ObservableList<String> stopTimeStrings = FXCollections.observableArrayList();
-            for (JourneyLeg leg : journeyLegs) {
+            for (int i = 0; i < journeyLegs.size(); i++) {
+                JourneyLeg leg = journeyLegs.get(i);
+                LocalTime departureTime = leg.getDepartureTime();
+
                 String stopName = StopName(leg.getFromStop());
                 String displayText = stopName + " - " + leg.getDepartureTime().toString();
+
+                if (departureTime.isAfter(windowStart) || departureTime.isBefore(windowEnd)) {
+                    displayText += " (Unavailable)";
+                }
+
+                if (i == journeyLegs.size() - 1) {
+                    displayText += " (Unavailable)";  // Mark the last item as unavailable
+                }
+
                 stopTimeStrings.add(displayText);
                 System.out.println("Adding to ListView: " + displayText);
                 if (RendertimeComboBox != null) {
@@ -394,8 +511,25 @@ public class TrackBusPanelController {
 
             System.out.println("Setting ListView items...");
             System.out.println("ListView should be updated.");
+
+        RendertimeComboBox.setOnAction(event -> {
+            String selectedItem = RendertimeComboBox.getSelectionModel().getSelectedItem();
+            if (selectedItem != null && selectedItem.contains(" (Unavailable)")) {
+                RenderRoutesAlert("Invalid choice");
+                RendertimeComboBox.getSelectionModel().clearSelection();
+                System.out.println("This stop is unavailable and cannot be selected.");
+            }
+        });
     }
 
+    /**
+     *
+     * gets the VJC code from the string
+     *
+     * @param selectedItem
+     * @param routeName
+     * @return
+     */
     private String handleDepartureTimeSelection(String selectedItem, String routeName) {
         // split the selected item to extract stop and time information
         String[] parts = selectedItem.split(" at ");
@@ -447,20 +581,57 @@ public class TrackBusPanelController {
         return null;
     }
 
-    // show a warning alert if no route is selected
-    private void showAlert(String title, String content) {
+// taken from https://www.w3schools.com/java/java_regex.asp
+    public String returnVJCForLiveRouteString(String liveRouteString){
+        String regex = "\\(([^)]+)\\)$";
+
+        // compile the regex pattern
+        Pattern pattern = Pattern.compile(regex);
+
+        // use matcher to match the pattern against the input string
+        Matcher matcher = pattern.matcher(liveRouteString);
+        String vjc = null;
+        // extract the VJC
+        if (matcher.find()) {
+            vjc = matcher.group(1);
+            System.out.println("Extracted VJC: " + vjc);
+        } else {
+            System.out.println("No VJC found.");
+        }
+        return vjc;
+    }
+
+
+    private void RenderRoutesAlert(String title) {
         Alert alert = new Alert(Alert.AlertType.WARNING);
         alert.setTitle(title);
         alert.setHeaderText(null);
-        alert.setContentText(content);
+        alert.setContentText("This stop is unavailable and cannot be selected.");
         alert.showAndWait();
 
         routesComboBox.setPromptText("Select a route");
         departureTimeComboBox.setPromptText("Select a departure time");
     }
 
+    private void LiveTimesAlert(String title) {
+        Alert alert = new Alert(Alert.AlertType.WARNING);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        alert.setContentText("Please Note: These travel times are predicted by the Tom Tom API and may not be accurate");
+        alert.showAndWait();
+
+    }
 
 
+    /**
+     *  handles the event when the switch view button is clicked, either to track live buses or simulated buses depending on the selection in the
+     *  departure time combo box, the method fetches and processes live route data or parses the
+     *   selected route and departure time to initiate bus tracking and mapping.
+     *
+     * @throws IOException
+     * @throws InterruptedException
+     * @throws SQLException
+     */
     @FXML
     private void onSwitchViewButtonClick() throws IOException, InterruptedException, SQLException {
         // check if the bus icon controller is initialised
@@ -492,15 +663,11 @@ public class TrackBusPanelController {
                     System.out.println("Fetch task succeeded.");
                     List<LiveRouteInfo> liveRouteInfoList = getValue();
                     if (liveRouteInfoList != null && !liveRouteInfoList.isEmpty()) {
-                        useLiveRoutes = true;
                         System.out.println("use Live routes before:");
                         selectedRouteName = null;
                         selectedVehicleJourneyCode = null;
                         selectedDay = null;
 
-                        if (stopsPanelController != null) {
-                            stopsPanelController.setUseLiveRoutes(useLiveRoutes);
-                        }
                         System.out.println("use live routes after" + useLiveRoutes);
                         for (LiveRouteInfo liveRouteInfo : liveRouteInfoList) {
                             String routeId = liveRouteInfo.getLineRef();
@@ -533,10 +700,18 @@ public class TrackBusPanelController {
                             System.out.println("Selected Route Name: " + selectedRouteName);
                             System.out.println("Selected Vehicle Journey Code: " + selectedVehicleJourneyCode);
                             System.out.println("Selected Day: " + selectedDay);
-
+                            selectedVehicleJourneyCode = returnVJCForLiveRouteString(RendertimeComboBox.getValue());
+                            System.out.println(selectedVehicleJourneyCode);
                             // update ui once all data is processed
                             Platform.runLater(() -> {
-                                busIconController.startBusMovementUpdate(selectedRouteName, liveRouteInfoList, useLiveRoutes);
+                                useLiveRoutes = true;
+                                if (stopsPanelController != null) {
+                                    busIconController.setUseLiveRoutes(useLiveRoutes);
+                                }else{
+                                    System.out.println("stops panel controller null at Live onclick ");
+                                }
+                                LiveTimesAlert("Live Routes Alert");
+                                busIconController.startBusMovementUpdate(selectedRouteName, liveRouteInfoList, useLiveRoutes,selectedVehicleJourneyCode);
                                 renderNextPanel(selectedRouteName, selectedVehicleJourneyCode, selectedDay);
 
                             });
@@ -559,17 +734,23 @@ public class TrackBusPanelController {
             fetchThread.start();
 
         } else {
-            // case where "track live is not chosen"
-            useLiveRoutes = false;
+            //case where "Track live is not chosen"
 
             // end any existing tasks
             if (activeBusTask != null && activeBusTask.isRunning()) {
                 activeBusTask.cancel(true);
                 activeBusTask = null;
+                System.out.println("Cancelling active task");
             }
 
             busIconController.stopBusMovementUpdate();
-
+            if (activeTimeline != null) {
+                activeTimeline.stop();
+                activeTimeline = null;
+                System.out.println("Cancelling previous timeline");
+            } else {
+                System.out.println("No active timeline to cancel");
+            }
             // split the selected item to extract stop and time information
             String[] parts = selectedValue.split(" at ");
             if (parts.length == 2) {
@@ -625,36 +806,55 @@ public class TrackBusPanelController {
                                 e.printStackTrace();
                             }
                         }
+
                         Task<Void> task = new Task<Void>() {
                             @Override
                             protected Void call() throws Exception {
-                                busIconController.mapActiveBuses(getDay(), currentDepartureTime[0], 1, selectedRouteName, vehicleJourneyCode);
+                                busIconController.mapActiveBuses(getDay(), currentDepartureTime[0], timeWindow, selectedRouteName, vehicleJourneyCode);
                                 return null;
                             }
 
                             @Override
                             protected void succeeded() {
-                                if (stopsPanelController != null) {
-                                    stopsPanelController.setUseLiveRoutes(useLiveRoutes);
-                                }
-                                System.out.println("Bus mapping completed successfully.");
                                 Platform.runLater(() -> {
+                                    if (activeBusTask != null && activeBusTask != this && activeBusTask.isRunning()) {
+                                        activeBusTask.cancel(true);
+                                        //activeBusTask = null;
+                                        System.out.println("Cancelling active task");
+                                    }
+
+                                    stopsPanelController stopsController = mainController.getStopsPanelController();
+                                    useLiveRoutes = false;
+                                    if (stopsController != null) {
+                                        busIconController.setUseLiveRoutes(useLiveRoutes);
+                                        System.out.println("At set on 648 we see = " + useLiveRoutes);
+                                    } else {
+                                        System.err.println("StopsPanelController is null, cannot set useLiveRoutes.");
+                                    }
+
+
+                                System.out.println("Bus mapping completed successfully.");
+
                                     System.out.println("Calling renderNextPanel...");
                                     System.out.println("selectedRouteName = " + selectedRouteName);
                                     System.out.println("selectedVehicleJourneyCode = " + selectedVehicleJourneyCode);
                                     System.out.println("selectedDay = " + selectedDay);
                                     renderNextPanel(selectedRouteName, selectedVehicleJourneyCode, selectedDay);
                                     System.out.println("Finished calling renderNextPanel.");
+                                    System.out.println("previous selected route name : " + selectedRoute);
+
 
                                     //handling to allow user to update page to map new buses if desired
-                                    Timeline timer = new Timeline(new KeyFrame(javafx.util.Duration.minutes(5), event -> {
+                                    activeTimeline = new Timeline(new KeyFrame(javafx.util.Duration.minutes(2), event -> {
+                                        System.out.println("Timeline triggered");
                                         //code runs every 10 minutes so user isnt bombarded
                                         Platform.runLater(() -> {
+                                            System.out.println(" at set on 648 we see = " + useLiveRoutes);
                                             Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
                                             alert.setTitle("Restart Bus Mapping");
                                             alert.setHeaderText("Restart Bus Mapping?");
                                             alert.setContentText("New bus routes may have started since the most previous search, would you like to update the new buses?" +
-                                                    "CAUTION, you will be returned to the bus you initially searched for.");
+                                                    "CAUTION, you will be returned to the bus you initially searched for." + selectedRouteName);
 
                                             ButtonType buttonTypeYes = new ButtonType("Yes");
                                             ButtonType buttonTypeNo = new ButtonType("No", ButtonBar.ButtonData.CANCEL_CLOSE);
@@ -695,6 +895,7 @@ public class TrackBusPanelController {
 
                                                         if (departureTime != null) {
                                                             selectedRouteName = extractRouteName(selectedRoute);
+                                                            System.out.println("proposed selected route name" + selectedRouteName);
                                                             selectedVehicleJourneyCode = vehicleJourneyCode;
                                                             selectedDay = getDay();
                                                             System.out.println("Selected From Stop: " + stopSection);
@@ -704,10 +905,10 @@ public class TrackBusPanelController {
                                                             System.out.println("Selected Day: " + selectedDay);
 
 
-                                                            Task<Void> task = new Task<Void>() {
+                                                            Task<Void> newTask = new Task<Void>() {
                                                                 @Override
                                                                 protected Void call() throws Exception {
-                                                                    busIconController.mapActiveBuses(getDay(), currentDepartureTime[0], 1, selectedRouteName, vehicleJourneyCode);
+                                                                    busIconController.mapActiveBuses(getDay(), currentDepartureTime[0], timeWindow, selectedRouteName, vehicleJourneyCode);
                                                                     return null;
                                                                 }
 
@@ -720,7 +921,9 @@ public class TrackBusPanelController {
                                                                         System.out.println("selectedRouteName = " + selectedRouteName);
                                                                         System.out.println("selectedVehicleJourneyCode = " + selectedVehicleJourneyCode);
                                                                         System.out.println("selectedDay = " + selectedDay);
+
                                                                         renderNextPanel(selectedRouteName, selectedVehicleJourneyCode, selectedDay);
+
                                                                         System.out.println("Finished calling renderNextPanel.");
                                                                     });
 
@@ -732,8 +935,8 @@ public class TrackBusPanelController {
                                                                     getException().printStackTrace();
                                                                 }
                                                             };
-
-                                                            Thread thread = new Thread(task);
+                                                            activeBusTask = newTask;
+                                                            Thread thread = new Thread(newTask);
                                                             thread.setDaemon(true);
                                                             thread.start();
                                                         } else {
@@ -753,9 +956,10 @@ public class TrackBusPanelController {
                                             }
                                         });
                                     }));
-
-                                    timer.setCycleCount(Timeline.INDEFINITE); // run indefinety
-                                    timer.play();
+                                    System.out.println("activeTimeline set: " + (activeTimeline != null));
+                                    activeTimeline.setCycleCount(Timeline.INDEFINITE); // run indefinety
+                                    activeTimeline.play();
+                                    System.out.println("New activeTimeline started");
                                 });
 
                             }
@@ -766,7 +970,11 @@ public class TrackBusPanelController {
                                 getException().printStackTrace();
                             }
                         };
-
+                        if (activeBusTask != null && activeBusTask.isRunning()) {
+                            activeBusTask.cancel(true);
+                            System.out.println("Cancelling previous active task before starting new one.");
+                        }
+                        activeBusTask = task;
                         Thread thread = new Thread(task);
                         thread.setDaemon(true);
                         thread.start();
@@ -796,17 +1004,19 @@ public class TrackBusPanelController {
         System.out.println("renderNextPanel started with: " + selectedRouteName + ", " + selectedVehicleJourneyCode + ", " + selectedDay);
 
         if (mainController != null) {
+            mainController.loadSidePanel("/com/project/busfinder/GUI/routeDetailsPanel.fxml");
             stopsPanelController stopsController = mainController.getStopsPanelController();
+
             if (stopsController != null) {
                 System.out.println("Loading stop times in renderNextPanel...");
                 try {
-                    stopsController.loadStopTimes(selectedRouteName, selectedVehicleJourneyCode, selectedDay);
+                    stopsController.loadStopTimes(selectedRouteName, selectedVehicleJourneyCode, selectedDay,useLiveRoutes);
                 } catch (SQLException e) {
                     throw new RuntimeException(e);
                 }
                 System.out.println("Loaded stop times in renderNextPanel.");
             } else {
-                System.err.println("stopsPanelController is not initialized in renderNextPanel.");
+                System.err.println("StopsPanelController is not initialized in renderNextPanel.");
             }
         } else {
             System.err.println("MainController is null in renderNextPanel.");
@@ -818,11 +1028,9 @@ public class TrackBusPanelController {
         this.mainController = mainController;
         this.busIconController = mainController.getBusIconController();
         this.stopsPanelController = mainController.getStopsPanelController();
-        if (stopsPanelController != null) {
-            stopsPanelController.setUseLiveRoutes(useLiveRoutes);
-        }
     }
     public boolean getUseLiveRoutes() {
+        System.out.println("use live routes current state : " + useLiveRoutes);
         return useLiveRoutes;
     }
 
@@ -840,17 +1048,6 @@ public class TrackBusPanelController {
         }
     }
 
-    @FXML
-    public void moveToRouteDetailsPage() {
-        if (mainController != null) {
-            mainController.loadSidePanel("/com/project/busfinder/GUI/routeDetailsPanel.fxml");
-
-        }
-    }
-
-    public String getMostRecentDay(){
-        return this.selectedDay;
-    }
 
 
 }

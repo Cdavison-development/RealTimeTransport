@@ -7,11 +7,11 @@
 <?import javafx.scene.layout.RowConstraints?>
 <?import javafx.scene.layout.VBox?>
 
-<VBox fx:id="sidePanel" layoutY="12.0" prefHeight="400.0" prefWidth="190.0" style="-fx-background-color: #fcba03;" visible="true" xmlns="http://javafx.com/javafx/16" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.project.busfinder.GUI.SidePanelController">
+<VBox fx:id="sidePanel" layoutY="12.0" prefHeight="400.0" prefWidth="250.0" style="-fx-background-color: #fcba03;" visible="true" xmlns="http://javafx.com/javafx/16" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.project.busfinder.GUI.SidePanelController">
     <children>
-        <GridPane fx:id="sidePanelGridPane" alignment="CENTER" prefHeight="448.0" prefWidth="190.0">
+        <GridPane fx:id="sidePanelGridPane" alignment="CENTER" prefHeight="448.0" prefWidth="250.0">
             <columnConstraints>
-                <ColumnConstraints hgrow="SOMETIMES" minWidth="10.0" prefWidth="100.0" />
+                <ColumnConstraints hgrow="SOMETIMES" minWidth="10.0" prefWidth="250.0" />
             </columnConstraints>
             <rowConstraints>
                 <RowConstraints minHeight="10.0" prefHeight="30.0" valignment="CENTER" vgrow="SOMETIMES" />
@@ -20,7 +20,6 @@
             </rowConstraints>
             <children>
                 <Button alignment="CENTER" mnemonicParsing="false" prefHeight="69.0" prefWidth="191.0" stylesheets="@style.css" text="button" GridPane.halignment="CENTER" GridPane.valignment="CENTER" />
-                <TextField fx:id="CompanyTextField" alignment="CENTER" promptText="Bus Finder Inc." text="test test " GridPane.rowIndex="2" />
             </children>
         </GridPane>
     </children>

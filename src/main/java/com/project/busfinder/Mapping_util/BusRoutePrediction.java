@@ -19,7 +19,7 @@ import static com.project.busfinder.helperFunctions.getStopName.StopName;
 
 public class BusRoutePrediction {
     private static final String API_KEY = "DMANLGTWEFKcXIN9XsEUfc89vLjfOKY1";
-    private static final long REQUEST_DELAY_MS = 150;
+    private static final long REQUEST_DELAY_MS = 400;
 
     public static void main(String[] args) {
         String routeID = "33";

@@ -36,16 +36,29 @@ public class stopsPanelController {
 
     }
 
-    public void loadStopTimes(String routeId, String vehicleJourneyCode, String day) throws SQLException {
-        System.out.println("useLiveRoutes = " + useLiveRoutes);
+    /**
+     *
+     * gets the populates the stop list view with the stops and expected time stop is met  for a given routeID and VJC
+     *
+     *
+     * @param routeId
+     * @param vehicleJourneyCode
+     * @param day
+     * @param useLiveRoutes
+     * @throws SQLException
+     */
+    public void loadStopTimes(String routeId, String vehicleJourneyCode, String day,boolean useLiveRoutes) throws SQLException {
+        //setUseLiveRoutes(useLiveRoutes);
+        System.out.println("use live routes Print" + useLiveRoutes);
         System.out.println("loadStopTimes started...");
         System.out.println("Clearing previous data...");
         stopListView.getItems().clear();
-
+        //setUseLiveRoutes(useLiveRoutes);
+        Task<List<String>> predictionTask = null;
         if (useLiveRoutes) {
             loadingIndicator.setVisible(true);
             // query the API for departure times on separate thread to ensure user can use program during search
-            Task<List<String>> predictionTask = new Task<>() {
+            predictionTask = new Task<>() {
                 @Override
                 protected List<String> call() throws SQLException {
                     BusRoutePrediction busRoutePrediction = new BusRoutePrediction();
@@ -77,6 +90,7 @@ public class stopsPanelController {
             predictionThread.setDaemon(true); // end thread when application exits
             predictionThread.start();
         } else {
+
 
             List<JourneyLeg> journeyLegs = getJourneyLegs(routeId, vehicleJourneyCode, day);
             System.out.println("loadStopTimes journeyLegs: " + journeyLegs);
@@ -120,10 +134,6 @@ public class stopsPanelController {
     }
     public void setRendertimeComboBox(ComboBox<String> rendertimeComboBox) {
         this.rendertimeComboBox = rendertimeComboBox;
-    }
-    public void setUseLiveRoutes(boolean useLiveRoutes) {
-        this.useLiveRoutes = useLiveRoutes;
-        System.out.println("useLiveRoutes = " + useLiveRoutes);
     }
 
 }

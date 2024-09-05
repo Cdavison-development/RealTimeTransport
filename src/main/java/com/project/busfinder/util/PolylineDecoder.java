@@ -22,6 +22,16 @@ public class PolylineDecoder {
 
     private static final double DISTANCE_THRESHOLD = 2 ;
 
+    /**
+     * When considering how we would handle data in the initial stages of data analysis in python, we had two options for storing polyline coordinate data,
+     * either store a massively large Json array of coordinates for a route, Or use polyline encoding, to massively shorten the size of the string, but having
+     * to decode the polyline later on. we chose the latter.
+     *
+     *  largely taken from https://github.com/gsanthosh91/DecodePolyline/blob/master/app/src/main/java/com/gsanthosh91/decodepolylinemap/utils/PolyUtils.java
+     *
+     * @param encoded
+     * @return a List of coordinates for the decoded polyline
+     */
     public static List<Coordinate> decodePolyline(String encoded) {
         List<Coordinate> polyline = new ArrayList<>();
         int index = 0, len = encoded.length();
@@ -62,6 +72,13 @@ public class PolylineDecoder {
         return polyline;
     }
 
+    /**
+     * as the encoded polyline is a Json array, in order to store is as a basic arrayList, we append each decoded polyline
+     * section to a single arrayList object. This is useful for when we want to treat a polyline as one large object
+     *
+     * @param json
+     * @return a single list of coordinate objects
+     */
     public static List<Coordinate> decodeAndConcatenatePolylinesFromString(String json) {
         Gson gson = new Gson();
         Type listType = new TypeToken<List<String>>() {}.getType();
@@ -75,7 +92,12 @@ public class PolylineDecoder {
 
         return concatenatedPolyline;
     }
-
+    /**
+     * used to get single polyline sections, better for when we want to track individual segments.
+     *
+     * @param json
+     * @return list of lists, where each inner list is the coordinate object for a decoded polyline
+     */
     public static List<List<Coordinate>> decodePolylinesIndividually(String json) {
         Gson gson = new Gson();
         Type listType = new TypeToken<List<String>>() {}.getType();
@@ -91,28 +113,4 @@ public class PolylineDecoder {
     }
 
 
-
-
-
-    public static void main(String[] args) {
-
-        String jsonString = "[\"wbgeIjytOPiCQE@LCVW|CILC?MCM|AARYvCq@`FD?RN@XLdA^tERhCUNy@T\","
-                + "\"{fgeIjzuOx@Un@a@dAg@d@g@`AgAL@fCpEr@nA\","
-                + "\"qxfeI`{uOGLdAhB^JBGNGHBHJBP?RENCDJdBh@bBHPCJOZi@bAWf@o@nB]z@MTsAdBQVM^?PC`@ENJNJr@Nl@b@nARl@@C\","
-                + "\"_yfeI`awOABVt@ZhAjBtFZFTPlAp@fBzA`BpBbBlCf@lA\","
-                + "\"kefeIp|wOPl@h@dCtA`IDd@Ab@Ip@_@zBFD\"]";
-
-        //List<Coordinate> polyline = decodeAndConcatenatePolylinesFromString(routeData.getPolylineData());
-        //System.out.println("Concatenated Polyline:");
-        //for (Coordinate coord : polyline) {
-            //System.out.println("Lat: " + coord.getLatitude() + ", Lon: " + coord.getLongitude());
-        //}
-    }
-
-    public static void writeLinestringToFile(String linestring, String filePath) throws IOException {
-        // Write the LINESTRING to a file using a BufferedWriter
-        try (BufferedWriter writer = new BufferedWriter(new FileWriter(filePath))) {
-            writer.write(linestring);
-        }
-    }
 }

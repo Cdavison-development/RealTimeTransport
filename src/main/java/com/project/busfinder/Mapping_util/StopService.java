@@ -21,6 +21,13 @@ public class StopService {
             return conn;
         }
 
+    /**
+     *
+     * gets coordinates for a list of bus stops by querying the database to find the coordinates for each stop ID,
+     *
+     * @param stopIds
+     * @return a map where each key is a stop ID and its value is the corresponding coordinate object
+     */
     public Map<String, Coordinate> getStopCoordinates(List<String> stopIds) {
         // map to store stop IDs and their corresponding coordinates
         Map<String, Coordinate> stopCoordinates = new HashMap<>();
@@ -54,6 +61,14 @@ public class StopService {
         return stopCoordinates; // return the map of stop coordinates
     }
 
+    /**
+     *
+     * queries database to get long and lat values for a given stop ID
+     *
+     * @param stopId
+     * @return coordinate object storing long and lat values
+     * @throws SQLException
+     */
     public Coordinate getCoordinates(String stopId) throws SQLException {
         String query = "SELECT longitude, latitude FROM bus_stops WHERE stop_id = ?";
 

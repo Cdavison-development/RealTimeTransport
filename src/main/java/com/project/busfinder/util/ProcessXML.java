@@ -28,12 +28,10 @@ import javax.xml.stream.*;
 
 import static com.project.busfinder.helperFunctions.getUniqueIdentifer.GetUniqueIdentifier;
 
-// need to account for the different days outlines in XML.
 
 
 public class ProcessXML {
-
-    public String previousDay;
+    // main function used for testing individual files
     public static void main(String[] args) {
         String Filename = "data/routes/AMSY_10A_AMSYPC00011414710A_20240721_-_1894508.xml";
         try {
@@ -70,6 +68,18 @@ public class ProcessXML {
         }
     }
 
+
+    /**
+     *
+     * Used to iterate over an XML file and grab all relevant data, and insert into DB
+     *
+     *
+     *
+     * @param doc given XML document
+     * @param conn database connection
+     * @param filePath specified filepath, as shown in the main, but more accurately in addTimes, as we iterate over this function
+     *                 for files in a folder.
+     */
     public static void processXMLAndInsertData(Document doc, Connection conn, String filePath) {
         try {
             int journeyCounter = 1;
@@ -132,10 +142,12 @@ public class ProcessXML {
                                                 LocalTime newDepartureTime = departureTime.plus(duration);
                                                 LocalDate date = determineDateForDay(dayOfWeek, newDepartureTime);
                                                 JourneyLegDeparture journeyLeg = new JourneyLegDeparture(fromStop, toStop, javafx.util.Duration.millis(duration.toMillis()), newDepartureTime, date);
-
+                                                // if the time between stops is <1 minutes, the RunTime tag = 0. To combat this, split the minute between however many stops
+                                                //have a runtime of 0. Example: rather than Stop A (08:05:00) and Stop B (08:05:00) and Stop C (08:06:00),
+                                                // we get Stop A (08:05:00) and Stop B (08:05:30) and Stop C (08:06:00). thus spreading the time out evenly
                                                 if (!sameMinuteLegs.isEmpty() && !newDepartureTime.truncatedTo(ChronoUnit.MINUTES).equals(sameMinuteLegs.get(0).getDepartureTime().truncatedTo(ChronoUnit.MINUTES))) {
                                                     distributeTimeWithinSameMinute(sameMinuteLegs);
-                                                    insertJourneyLegsIntoDB(sameMinuteLegs, routeId, journeyPatternRef, vehicleJourneyRef, dayOfWeek, conn, tableName);
+                                                    groupAndInsertJourneyLegsByMinute(sameMinuteLegs, routeId, journeyPatternRef, vehicleJourneyRef, dayOfWeek, conn, tableName);
                                                     sameMinuteLegs.clear();
                                                 }
 
@@ -152,7 +164,7 @@ public class ProcessXML {
                                 // process any remaining legs after the loop
                                 if (!sameMinuteLegs.isEmpty()) {
                                     distributeTimeWithinSameMinute(sameMinuteLegs);
-                                    insertJourneyLegsIntoDB(sameMinuteLegs, routeId, journeyPatternRef, vehicleJourneyRef, dayOfWeek, conn,tableName);
+                                    groupAndInsertJourneyLegsByMinute(sameMinuteLegs, routeId, journeyPatternRef, vehicleJourneyRef, dayOfWeek, conn,tableName);
                                 }
                             }
                         }
@@ -163,6 +175,17 @@ public class ProcessXML {
         }
     }
 
+    /**
+     * We had a problem with plotting buses that started before midnight (00:00), as while they may have started on
+     * sunday, they may move over to a monday. To solve this, we use example dates to emulate the crossing over of a day.
+     *
+     * rather than seeing monday,tuesday etc.. we now use Timestrings to emulate a specific date being moved to.
+     *
+     *
+     * @param day, used to get correct basedate using the switch statement
+     * @param time need to use this as time value can change if we need to distribute time over columns
+     * @return returns basedate value represented as a timestring
+     */
     private static LocalDate determineDateForDay(String day, LocalTime time) {
         LocalDate baseDate;
         switch (day) {
@@ -198,6 +221,14 @@ public class ProcessXML {
 
         return baseDate;
     }
+
+    /**
+     * gets text of child element with specified tag name from a parent element
+     *
+     * @param parent the parent element to search through
+     * @param tagName the tag name of the child element whose content is going to be retrieved
+     * @return the text of the first matching child element, or null if not found
+     */
     private static String getNestedTextContent(Element parent, String tagName) {
         // retrieve the list of nodes with the specified tag name
         NodeList nodeList = parent.getElementsByTagName(tagName);
@@ -213,6 +244,14 @@ public class ProcessXML {
         return null;
     }
 
+    /**
+     * extracts and returns a list of days of week the bus is active.
+     *
+     *
+     *
+     * @param doc the XML document
+     * @return a list of the days of week the bus is active.
+     */
     private static List<String> extractDaysOfWeek(Document doc) {
         // create a list to store the days of the week
         List<String> daysOfWeek = new ArrayList<>();
@@ -263,20 +302,16 @@ public class ProcessXML {
         return daysOfWeek;
     }
 
-    private static String elementToString(Element element) {
-        try {
-            // convert the XML element to a string representation
-            TransformerFactory tf = TransformerFactory.newInstance();
-            Transformer transformer = tf.newTransformer();
-            transformer.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
-            StringWriter writer = new StringWriter();
-            transformer.transform(new DOMSource(element), new StreamResult(writer));
-            return writer.getBuffer().toString();
-        } catch (Exception e) {
-            // handle and return any errors during the conversion process
-            return "error converting element to string: " + e.getMessage();
-        }
-    }
+    /**
+     *
+     * get the departure time value for a given journey code. It does this by searching for a "VehicleJourney"
+     * element that contains the journeyCodeValue and from this gets the corresponding departure time and returns it.
+     *
+     * @param filePath path to the XML file
+     * @param journeyCodeValue journey code to match
+     * @return departure time for a journey code.
+     * @throws Exception
+     */
 
     public static String getDepartureTime(String filePath, String journeyCodeValue) throws Exception {
         // create an XML event reader to parse the XML file
@@ -317,7 +352,19 @@ public class ProcessXML {
         return departureTime;
     }
 
-    private static void insertJourneyLegsIntoDB(List<JourneyLegDeparture> journeyLegs, String routeId, String journeyPatternRef, String vehicleJourneyRef, String daysOfWeek, Connection conn, String tableName) {
+    /**
+     *  inserts journey leg departures into the db. It groups legs that occur within the same minute. This is important for
+     *  distributing time over trips that happen within the same minute.
+     *
+     * @param journeyLegs
+     * @param routeId current route ID
+     * @param journeyPatternRef current journey pattern ref
+     * @param vehicleJourneyRef current vehicle journey code
+     * @param daysOfWeek days of week in current leg
+     * @param conn database connection
+     * @param tableName name of the table
+     */
+    private static void groupAndInsertJourneyLegsByMinute(List<JourneyLegDeparture> journeyLegs, String routeId, String journeyPatternRef, String vehicleJourneyRef, String daysOfWeek, Connection conn, String tableName) {
         // initialise variables to track legs within the same minute
         List<JourneyLegDeparture> sameMinuteLegs = new ArrayList<>();
         LocalTime currentMinute = null;
@@ -347,6 +394,10 @@ public class ProcessXML {
         }
     }
 
+    /**
+     *
+     * helper function for distributing time within the same minute by ensuring that there is more than one leg, and then continuing with the insertion
+     */
     private static void processLegs(List<JourneyLegDeparture> legs, String routeId, String journeyPatternRef, String vehicleJourneyRef, String daysOfWeek, Connection conn,String tableName) {
         // distribute times within the same minute if there is more than one leg
         if (legs.size() > 1) {
@@ -357,6 +408,13 @@ public class ProcessXML {
         insertLegsIntoDatabase(legs, routeId, journeyPatternRef, vehicleJourneyRef, daysOfWeek, conn, tableName);
     }
 
+    /**
+     *
+     * as previously explained , equally distributes time over columns with same time value.
+     *
+     *
+     * @param sameMinuteLegs
+     */
     private static void distributeTimeWithinSameMinute(List<JourneyLegDeparture> sameMinuteLegs) {
         int legCount = sameMinuteLegs.size();
         long secondsPerLeg = 60 / legCount; // distribute 60 seconds equally among the legs
@@ -369,8 +427,15 @@ public class ProcessXML {
             sameMinuteLegs.get(i).setDepartureTime(newDepartureTime);
         }
     }
-//change this for each day
-private static String determineTableForDays(String dayOfWeek) {
+
+    /**
+     * used to identify the table that the data is going to be inserted into.
+     *
+     *
+     * @param dayOfWeek String storing the day of week value used to identify table
+     * @return
+     */
+    private static String determineTableForDays(String dayOfWeek) {
     switch (dayOfWeek) {
         case "Monday":
             return "monday_routes";
@@ -383,7 +448,7 @@ private static String determineTableForDays(String dayOfWeek) {
         case "Friday":
             return "friday_routes";
         case "Saturday":
-            return "saturday_routessdx23";
+            return "saturday_routes";
         case "Sunday":
             return "sunday_routes";
         default:
@@ -391,6 +456,22 @@ private static String determineTableForDays(String dayOfWeek) {
     }
 }
 
+    /**
+     *
+     *
+     * Uses an sql query to insert data into table for each leg in journey legs.
+     *
+     *
+     *
+     *
+     * @param journeyLegs iterated over for how ever many journey legs are found in the XML
+     * @param routeId  used to insert routeId data into DB
+     * @param journeyPatternRef used to insert journeyPatternRef data into DB
+     * @param vehicleJourneyRef used to insert vehicleJourneyRef into DB
+     * @param dayOfWeek used to insert day of week data into DB
+     * @param conn database connection
+     * @param tableName used to identify table to be used for insertion
+     */
     private static void insertLegsIntoDatabase(List<JourneyLegDeparture> journeyLegs, String routeId, String journeyPatternRef, String vehicleJourneyRef, String dayOfWeek, Connection conn,String tableName) {
 
         // iterate through each leg and insert its data into the specified table
@@ -413,62 +494,12 @@ private static String determineTableForDays(String dayOfWeek) {
             }
         }
     }
-    public static void processXMLtoJourneyCode(Document doc, Connection conn, String filePath) throws Exception {
-        try {
-            int journeyCounter = 1;
 
-            // extract the list of VehicleJourney elements from the XML
-            NodeList vehicleJourneyList = doc.getElementsByTagName("VehicleJourney");
-
-            // extract the days of the week associated with the journeys
-            List<String> daysOfWeek = extractDaysOfWeek(doc);
-            // System.out.println("days of week  : " +daysOfWeek);
-            // List<String> previousDaysOfWeek = null;
-            // iterate over each VehicleJourney in the list
-            for (int i = 0; i < vehicleJourneyList.getLength(); i++) {
-                Element vehicleJourney = (Element) vehicleJourneyList.item(i);
-                String journeyCode = getNestedTextContent(vehicleJourney, "JourneyCode");
-                String routeId = GetUniqueIdentifier(filePath);
-                String journeyPatternRef = getNestedTextContent(vehicleJourney, "JourneyPatternRef");
-                String initialDepartureTime = getDepartureTime(filePath, journeyCode);
-                LocalTime departureTime = LocalTime.parse(initialDepartureTime, DateTimeFormatter.ofPattern("HH:mm:ss"));
-
-                // generate a unique reference for each VehicleJourney
-                String vehicleJourneyRef = "VJ_" + journeyCounter;
-                journeyCounter++;
-
-                NodeList journeyPatternList = doc.getElementsByTagName("JourneyPattern");
-
-
-                // find and process the corresponding JourneyPattern
-                for (int j = 0; j < journeyPatternList.getLength(); j++) {
-                    Element journeyPattern = (Element) journeyPatternList.item(j);
-                    if (journeyPattern.getAttribute("id").equals(journeyPatternRef)) {
-                        String sectionRef = getNestedTextContent(journeyPattern, "JourneyPatternSectionRefs");
-                        NodeList sectionList = doc.getElementsByTagName("JourneyPatternSection");
-                        for (String dayOfWeek : daysOfWeek) {
-                            String tableName = determineTableForDays(dayOfWeek);
-                            // insert the journey code and other relevant information into the database
-                            String JourneyCodeSQL = "INSERT INTO journeyCode_test (journey_code, route_id, journey_pattern_ref, Vehicle_journey_code, days_of_week) VALUES (?, ?, ?, ?, ?)";
-                            try (PreparedStatement pstmt = conn.prepareStatement(JourneyCodeSQL)) {
-                                pstmt.setString(1, journeyCode);
-                                pstmt.setString(2, routeId);
-                                pstmt.setString(3, journeyPatternRef);
-                                pstmt.setString(4, vehicleJourneyRef);
-                                pstmt.setString(5, dayOfWeek);
-                                pstmt.executeUpdate();
-                            } catch (SQLException e) {
-                                throw new RuntimeException(e);
-                            }
-                        }
-                    }
-                }
-            }
-        } finally {
-
-        }
-    }
-
+    /**
+     *
+     * get and set mathods to access private variables.
+     *
+     */
     private static class JourneyLegDeparture {
 
         private final String fromStop;

@@ -27,7 +27,7 @@ import javax.xml.xpath.XPathConstants;
 import org.xml.sax.InputSource;
 
 public class readLiveLocation {
-
+    // my api key for OpenBusData
     static String API_KEY = "19f45ab4075ee6ba01144659bd9c987468a00212";
     private static final String Posts_API_URL = "https://data.bus-data.dft.gov.uk/api/v1/datafeed/";
 
@@ -44,6 +44,18 @@ public class readLiveLocation {
         }
     }
 
+    /**
+     *
+     * fetches XML data for a given request, we request all vehicles under the operator Ref AMSY, future work includes handling more
+     * operator Refs, This would be easy to implement, however time constraints mean it cannot be done at the moment
+     *
+
+     *
+     *
+     * @return returns the XML data from the API if the request is successful, else return null
+     * @throws IOException
+     * @throws InterruptedException
+     */
     public static String fetchAndProcessResponse() throws IOException, InterruptedException {
         HttpClient client = HttpClient.newHttpClient();
         String parameters = "api_key=" + API_KEY + "&operatorRef=AMSY"; // AMSY being the operator ref for Arriva Merseyside
@@ -83,6 +95,18 @@ public class readLiveLocation {
         return null;
     }
 
+    /**
+     *
+     * parses the XML data returned by the api and iterates through each item in Vehicleactivities tree/block,
+     * storing the data we need in relevant variables. Currently, the openBusData live location API is rather broken,
+     * one of the primary problems is that data does not update. so routes that ended days ago are still live according to the
+     * api, therefore we need to filter by current time, to ensure we are mapping buses that are currently live.
+     *
+     * @param xml takes xml returned by fetchAndProcessResponse as input
+     * @return infoList of storing line_red,journeyRef, long and lat data for each live bus
+     * @throws IOException
+     * @throws InterruptedException
+     */
     public static List<LiveRouteInfo> processXmlResponse(String xml) throws IOException, InterruptedException {
         ArrayList<AbstractMap.SimpleEntry<String, String>> liveRoutes = new ArrayList<>();
         ArrayList<String> dbRoutes = ReadFromDatabase.readRoutes();

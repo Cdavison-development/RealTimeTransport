@@ -69,6 +69,8 @@ public class BusIconController {
     private Map<String, Timeline> activeTimelines = new HashMap<>();
     private volatile boolean stopBusMovementUpdate = false;
     private String CurrentDay = null;
+    private boolean useLiveRoutes = true;
+
 
     public BusIconController(MapView mapView) {
         //initialise variables
@@ -84,6 +86,7 @@ public class BusIconController {
 
     }
     public void initializeMap() {
+        //mainController.loadSidePanel("/com/project/busfinder/GUI/routeDetailsPanel.fxml");
         mapView.initialize(Configuration.builder().build());
         routeService = new RouteService();
         mapView.setCenter(new Coordinate(53.4013, -3.057244));  // set the initial map centre
@@ -93,9 +96,9 @@ public class BusIconController {
         mapView.addEventHandler(MarkerEvent.MARKER_CLICKED, event -> {
             event.consume();
             Marker clickedMarker = event.getMarker();
-
+            lockOntoMarker(clickedMarker,CurrentDay);
             handleMarkerClick(clickedMarker,CurrentDay);
-            lockOntoMarker(clickedMarker);
+            //lockOntoMarker(clickedMarker,CurrentDay);
         });
 
         // check when the map view is fully initialised
@@ -108,16 +111,24 @@ public class BusIconController {
 
 
     }
-    //cant call day from combo box for handleMarkerClick as the user could change the "day" item but not submit
+
+    /**
+     *
+     * handles the initializaton and rendering of the bus stop times in the stopsPanelController  on marker click
+     *
+     * @param clickedMarker
+     * @param day
+     */
     private void handleMarkerClick(Marker clickedMarker, String day) {
         // log the ID of the clicked marker
         System.out.println("Marker clicked with ID: " + clickedMarker.getId());
 
-        Platform.runLater(() -> {
-            mapView.setCenter(clickedMarker.getPosition());
-            mapView.setZoom(16);
-        });
 
+        System.out.println("use live routes is " + useLiveRoutes);
+        if (mainController.getStopsPanelController() == null) {
+            System.err.println("StopsPanelController was not initialized as expected.");
+            mainController.loadAndInitializeStopsPanel();  // Fallback initialization if needed
+        }
         for (Map.Entry<String, Marker> entry : MarkersWithVJC.entrySet()) {
             String key = entry.getKey();
             Marker marker = entry.getValue();
@@ -129,74 +140,33 @@ public class BusIconController {
                 if (underscoreIndex != -1) {
                     String routeId = key.substring(0, underscoreIndex);
                     String vehicleJourneyCode = key.substring(underscoreIndex + 1);
-
                     System.out.println("Route ID: " + routeId);
                     System.out.println("Vehicle Journey Code: " + vehicleJourneyCode);
-
-                    clearRenderedPolylines();
-                    RouteData selectedRouteData = routeService.getRouteData(routeId);
-                    String selectedPolylineData = selectedRouteData.getPolylineData();
-                    String polylineData = getPolylineDataForJourney(routeId);
-                    if (polylineData != null) {
-                        plotIndividualPolylines(selectedPolylineData, routeId);
-                    } else {
-                        System.out.println("Polyline data null");
-                    }
-                    plotStopsForRoute(routeId, vehicleJourneyCode, day);
-                    try {
-                        List<JourneyLeg> journeyLegs = getJourneyLegs(routeId, vehicleJourneyCode, day);
-                        for (JourneyLeg leg : journeyLegs) {
-                            String fromStop = StopName(leg.getFromStop());
-                            String toStop = StopName(leg.getToStop());
-                            System.out.println("From: " + fromStop + ", To: " + toStop + ", Departure Time: " + leg.getDepartureTime());
-                        }
-                    } catch (SQLException e) {
-                        System.err.println("Error retrieving journey legs: " + e.getMessage());
-                    }
-                    System.out.println("Checking mainController before loading side panel...");
-                    if (mainController == null) {
-                        System.err.println("MainController is null in BusIconController.");
-                        return;
-                    }
-
                     Platform.runLater(() -> {
-                        // attempt to load side panel if not already initialised
-                        if (stopsPanelController == null) {
-                            System.out.println("StopsPanelController is null, loading side panel...");
-                            mainController.loadSidePanel("/com/project/busfinder/GUI/routeDetailsPanel.fxml");
-
-                            // ensure the stopsPanelController is set after loading the side panel
-                            stopsPanelController = mainController.getStopsPanelController();
-                        }
-
-                        if (stopsPanelController != null) {
-                            System.out.println("StopsPanelController is initialized, proceeding to load stop times...");
-                            try {
-                                mainController.loadSidePanel("/com/project/busfinder/GUI/routeDetailsPanel.fxml");
-
-                                // ensure the stopsPanelController is set after loading the side panel
-                                stopsPanelController = mainController.getStopsPanelController();
-                                stopsPanelController.loadStopTimes(routeId, vehicleJourneyCode, day);
-
-                            } catch (SQLException e) {
-                                throw new RuntimeException(e);
-                            }
-                        } else {
-                            System.err.println("StopsPanelController is not initialized.");
+                        try {
+                            mainController.getStopsPanelController().loadStopTimes(routeId, vehicleJourneyCode, day,useLiveRoutes);
+                        } catch (SQLException e) {
+                            throw new RuntimeException(e);
                         }
                     });
 
                 } else {
                     System.out.println("Invalid format in MarkersWithVJC key: " + key);
                 }
-            } else {
-                System.out.println("No matching entry found in MarkersWithVJC for clicked marker.");
+                break;
             }
+
         }
     }
-        // initially, day will be the current day, then when called again it will be the chosen day
-    //will continue work on this when Get live routes is up to date
 
+    /**
+     *
+     * plots the markers for each stop and converts the name from the unique ID for the stop to the common name for the stop
+     *
+     * @param routeId
+     * @param vehicleJourneyCode
+     * @param Day
+     */
     private void plotStopsForRoute(String routeId, String vehicleJourneyCode,String Day) {
 
         clearRenderedMarkers();
@@ -256,7 +226,11 @@ public class BusIconController {
         return routeData != null ? routeData.getPolylineData() : null;
     }
 
-
+    /**
+     * clears JFX components from the mapview
+     *
+     *
+     */
     public void clearMapView() {
 
         System.out.println("Clearing map view...");
@@ -329,6 +303,20 @@ public class BusIconController {
         }
     }
 
+    /**
+     *
+     *
+     * Used for running simulated bus routes
+     *
+     * @param Day
+     * @param testDateTime
+     * @param timeWindowMinutes
+     * @param selectedRoute
+     * @param SelectedVJC
+     * @throws SQLException
+     * @throws IOException
+     * @throws InterruptedException
+     */
     public void mapActiveBuses(String Day, LocalDateTime testDateTime, int timeWindowMinutes, String selectedRoute, String SelectedVJC) throws SQLException, IOException, InterruptedException {
         // display the loading indicator while the map is being updated
         Platform.runLater(() -> progressIndicator.setVisible(true));
@@ -350,6 +338,8 @@ public class BusIconController {
         if (allJourneyLegsForRoute.isEmpty()) {
             System.out.println("No journey legs found for the selected route: " + selectedRoute);
             return;
+        }else{
+            System.out.println("all journey legs " + allJourneyLegsForRoute);
         }
         // find active buses within the specified time window
         activeBuses = findActiveBusesInTimeFrame(testTime, timeWindowMinutes, Day);
@@ -370,7 +360,7 @@ public class BusIconController {
                 difference = difference.plusDays(1);
             }
 
-
+            //System.out.println("active bus : " + routeId);
             String uniqueKey = routeId + "_" + vehicleJourneyCode;
 
             // check if there is an existing entry with the same key (routeId and vehicleJourneyCode)
@@ -487,15 +477,11 @@ public class BusIconController {
             if (SelectedVJC != null) {
                 String uniqueKey = selectedRoute + "_" + SelectedVJC;
                 Marker markerToLock = MarkersWithVJC.get(uniqueKey);
-
+                System.out.println("marker to lock is : " + markerToLock);
                 if (markerToLock != null) {
                     System.out.println("Locking onto marker with key: " + uniqueKey);
-                    lockOntoMarker(markerToLock);
-                    handleMarkerClick(markerToLock,Day);
-                    plotStopsForRoute(selectedRoute,SelectedVJC,Day);
+                    lockOntoMarker(markerToLock,Day);
                     markerToLock.setVisible(true);
-                    mapView.setCenter(markerToLock.getPosition());
-                    mapView.setZoom(18);
                 } else {
                     System.out.println("Marker not found for key: " + uniqueKey);
                 }
@@ -506,6 +492,19 @@ public class BusIconController {
         });
 
     }
+
+    /**
+     *
+     * starts the bus movement animation for each bus
+     * @param journeyInfo
+     * @param journeyLegs
+     * @param routeCoordinates
+     * @param startTime
+     * @param selectedRoute
+     * @param selectedVJC
+     * @param newMarkersWithVJC
+     * @param newBusMarkers
+     */
     public void startBusMovement(JourneyInfo journeyInfo, List<JourneyLeg> journeyLegs, List<Coordinate> routeCoordinates, LocalTime startTime, String selectedRoute, String selectedVJC, Map<String, Marker> newMarkersWithVJC, List<Marker> newBusMarkers) {
 
         String vehicleJourneyCode = journeyInfo.getVehicleJourneyCode();
@@ -582,7 +581,20 @@ public class BusIconController {
         uniqueCoordinates.clear();
     }
 
-
+    /**
+     *
+     * moves the bus marker along the journey route based on current time and progress through the journey legs
+     * if the bus reaches the final stop, or deviates sginificantly from the markers position, the marker is removed.
+     *
+     * This fixes the large problem where buses appeared to be "flying" around the map.
+     *
+     *
+     * @param initialBusMarker
+     * @param journeyLegs
+     * @param routeCoordinates
+     * @param stopCoordinates
+     * @param currentTime
+     */
     private void moveBus(Marker initialBusMarker, List<JourneyLeg> journeyLegs, List<Coordinate> routeCoordinates, Map<String, Coordinate> stopCoordinates, LocalTime currentTime) {
         final Marker[] busMarker = {initialBusMarker};
         //ideal threshold found through trial and error
@@ -679,7 +691,22 @@ public class BusIconController {
 
         return earthRadiusKm * c;
     }
-    public void mapLiveRoutesWithJourneyInfos(String selectedRoute, List<LiveRouteInfo> liveRouteInfoList, boolean firstRun) throws SQLException, IOException, InterruptedException {
+
+    /**
+     *
+     * initialises the live bus process, and locks onto the selected bus passed by the selected route and VJC parameters
+     *
+     * the movements are then updated by the startBusMovementUpdate function
+     *
+     * @param selectedRoute
+     * @param liveRouteInfoList
+     * @param firstRun
+     * @param VJC
+     * @throws SQLException
+     * @throws IOException
+     * @throws InterruptedException
+     */
+    public void mapLiveRoutesWithJourneyInfos(String selectedRoute, List<LiveRouteInfo> liveRouteInfoList, boolean firstRun,String VJC) throws SQLException, IOException, InterruptedException {
         Platform.runLater(() -> {
             try {
                 // show loading indicator while rendering new items
@@ -705,6 +732,7 @@ public class BusIconController {
 
                     if (patternData != null && patternData.getVehicleJourneyCode() != null && patternData.getDay() != null) {
                         CurrentDay = patternData.getDay();
+
                         String markerKey = routeId + "_" + patternData.getVehicleJourneyCode();
 
                             coordinatesForRoute.add(coordinate);
@@ -718,9 +746,10 @@ public class BusIconController {
                             newMarkersWithVJC.put(markerKey, busMarker);
                             newBusMarkers.add(busMarker);
 
-                            // lock onto marker
-                            if (firstRun && selectedRoute != null && routeId.equals(selectedRoute)) {
+                            // lock onto marker that matches requested marker
+                            if (firstRun && selectedRoute != null && routeId.equals(selectedRoute) && patternData.getVehicleJourneyCode().equals(VJC)) {
                                 markerToLockOnto = busMarker;
+                                System.out.println("vehicle journey code: " + patternData.getVehicleJourneyCode());
                             }
 
                     } else {
@@ -752,10 +781,7 @@ public class BusIconController {
                 // lock onto the selected marker
                 if (firstRun && markerToLockOnto != null) {
                     System.out.println("Locking onto marker for Route: " + selectedRoute);
-                    handleMarkerClick(markerToLockOnto,CurrentDay);
-                    lockOntoMarker(markerToLockOnto);
-                    mapView.setCenter(markerToLockOnto.getPosition());
-                    mapView.setZoom(18);
+                    lockOntoMarker(markerToLockOnto,CurrentDay);
                 }
                 // hide the progress indicator
                 progressIndicator.setVisible(false);
@@ -770,7 +796,18 @@ public class BusIconController {
         String response = fetchAndProcessResponse();
         return processXmlResponse(response);
     }
-    public void startBusMovementUpdate(String selectedRoute, List<LiveRouteInfo> liveRouteInfoList, boolean isLive) {
+
+    /**
+     *
+     * handles the movement for live buses
+     *
+     *
+     * @param selectedRoute
+     * @param liveRouteInfoList
+     * @param isLive
+     * @param VJC
+     */
+    public void startBusMovementUpdate(String selectedRoute, List<LiveRouteInfo> liveRouteInfoList, boolean isLive,String VJC) {
         stopBusMovementUpdate = false;
         // cancel any previous tasks
         if (scheduledTask != null && !scheduledTask.isCancelled()) {
@@ -797,7 +834,7 @@ public class BusIconController {
                 // update UI on JFX thread
                 Platform.runLater(() -> {
                     try {
-                        mapLiveRoutesWithJourneyInfos(selectedRoute, updatedLiveRouteInfoList, firstRun.get());
+                        mapLiveRoutesWithJourneyInfos(selectedRoute, updatedLiveRouteInfoList, firstRun.get(),VJC);
                         firstRun.set(false);
                     } catch (SQLException | IOException | InterruptedException e) {
                         e.printStackTrace();
@@ -819,8 +856,14 @@ public class BusIconController {
 
     }
 
-
-    private void lockOntoMarker(Marker marker) {
+    /**
+     * handles the mapping of JFX components on marker click
+     *
+     *
+     * @param targetMarker
+     * @param day
+     */
+    private void lockOntoMarker(Marker targetMarker, String day) {
         // stop the previous lock if there is one
         if (currentLockedMarker != null && lockTimeline != null) {
             lockTimeline.stop();  // stop the previous lock timeline
@@ -829,11 +872,11 @@ public class BusIconController {
         }
 
         isMapLocked = true;
-        currentLockedMarker = marker;
+        currentLockedMarker = targetMarker;
 
         // centre the map on the marker and zoom in
         Platform.runLater(() -> {
-            mapView.setCenter(marker.getPosition());
+            mapView.setCenter(targetMarker.getPosition());
             mapView.setZoom(18);
         });
 
@@ -852,6 +895,50 @@ public class BusIconController {
         }));
         lockTimeline.setCycleCount(Timeline.INDEFINITE);
         lockTimeline.play();
+        // add map components
+        for (Map.Entry<String, Marker> entry : MarkersWithVJC.entrySet()) {
+            String key = entry.getKey();
+            Marker marker = entry.getValue();
+
+            if (marker.equals(targetMarker)) {
+                System.out.println("Matched entry in MarkersWithVJC: " + key);
+
+                int underscoreIndex = key.indexOf("_");
+                if (underscoreIndex != -1) {
+                    String routeId = key.substring(0, underscoreIndex);
+                    String vehicleJourneyCode = key.substring(underscoreIndex + 1);
+
+                    System.out.println("Route ID: " + routeId);
+                    System.out.println("Vehicle Journey Code: " + vehicleJourneyCode);
+
+
+                    clearRenderedPolylines();
+                    RouteData selectedRouteData = routeService.getRouteData(routeId);
+                    String selectedPolylineData = selectedRouteData.getPolylineData();
+                    String polylineData = getPolylineDataForJourney(routeId);
+                    if (polylineData != null) {
+                        plotIndividualPolylines(selectedPolylineData, routeId);
+                    } else {
+                        System.out.println("Polyline data is null.");
+                    }
+                    plotStopsForRoute(routeId, vehicleJourneyCode, day);
+
+                    try {
+                        List<JourneyLeg> journeyLegs = getJourneyLegs(routeId, vehicleJourneyCode, day);
+                        for (JourneyLeg leg : journeyLegs) {
+                            String fromStop = StopName(leg.getFromStop());
+                            String toStop = StopName(leg.getToStop());
+                            System.out.println("From: " + fromStop + ", To: " + toStop + ", Departure Time: " + leg.getDepartureTime());
+                        }
+                    } catch (SQLException e) {
+                        System.err.println("Error retrieving journey legs: " + e.getMessage());
+                    }
+                } else {
+                    System.out.println("Invalid format in MarkersWithVJC key: " + key);
+                }
+                break;
+            }
+        }
     }
     public void setProgressIndicator(ProgressIndicator progressIndicator) {
         this.progressIndicator = progressIndicator;
@@ -860,11 +947,10 @@ public class BusIconController {
     public void setTrackBusPanelController(TrackBusPanelController controller) {
        // this.trackBusPanelController = controller;
     }
-    @FXML
-    public void moveToRouteDetailsPage() {
-        if (mainController != null) {
-            mainController.loadSidePanel("/com/project/busfinder/GUI/routeDetailsPanel.fxml");
-        }
+
+    public void setUseLiveRoutes(boolean useLiveRoutes) {
+        System.out.println("Setting useLiveRoutes in BusPanelController to: " + useLiveRoutes);
+        this.useLiveRoutes = useLiveRoutes;
     }
 
 }

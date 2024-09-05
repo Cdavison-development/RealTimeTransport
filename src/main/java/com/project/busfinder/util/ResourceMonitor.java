@@ -7,6 +7,12 @@ import java.lang.management.MemoryUsage;
 
 public class ResourceMonitor {
 
+    /**
+     * monitors system resource usage
+     *
+     * mostly taken from: https://stackoverflow.com/questions/47177/how-do-i-monitor-the-computers-cpu-memory-and-disk-usage-in-java
+     *
+     */
     public static void printSystemMetrics() {
         OperatingSystemMXBean osBean = ManagementFactory.getOperatingSystemMXBean();
         MemoryMXBean memoryBean = ManagementFactory.getMemoryMXBean();

@@ -2,6 +2,7 @@ package com.project.busfinder.readDatabase;
 
 
 import com.project.busfinder.Mapping_util.LiveRouteInfo;
+import javafx.util.Pair;
 
 import java.io.IOException;
 import java.sql.*;
@@ -51,22 +52,33 @@ public class getRoutes {
             e.printStackTrace();
         }
     }
-
-    public static Map<String, Boolean> getLiveRoutes(Connection conn) throws IOException, InterruptedException {
+    /**
+     * retrieves live route information and checks it against existing route and journey data in the database.
+     * returns a map where each route ID is associated with a list of pairs. each pair contains a boolean indicating
+     * whether the journey is live (true) or not (false), and the journey code.
+     *
+     *
+     * @param conn database connection object
+     * @return map linking route ids with lists of pairs indicating live status and journeycode
+     * @throws IOException
+     * @throws InterruptedException
+     */
+    public static Map<String, List<Pair<Boolean, String>>> getLiveRoutes(Connection conn) throws IOException, InterruptedException {
+        //get live route information
         List<LiveRouteInfo> routeInfoList = processXmlResponse(fetchAndProcessResponse());
-        Map<String, Boolean> routeExistsMap = new HashMap<>();
+        Map<String, List<Pair<Boolean, String>>> routeExistsMap = new HashMap<>();
         System.out.println("routes :  " + routeInfoList);
-
+    // query database to get all route ids and initialize the map
         try (PreparedStatement pstmt = conn.prepareStatement("SELECT route_id, journey_code FROM journeyCode")) {
             ResultSet rs = pstmt.executeQuery();
             while (rs.next()) {
                 String route_id = rs.getString("route_id");
-                routeExistsMap.put(route_id, false);
+                routeExistsMap.put(route_id, new ArrayList<>());
             }
         } catch (SQLException e) {
             e.printStackTrace();
         }
-
+        // check each live route against the database and update map
         for (LiveRouteInfo routeInfo : routeInfoList) {
             String route = routeInfo.getLineRef();
             String journeyRef = routeInfo.getJourneyRef();
@@ -80,10 +92,20 @@ public class getRoutes {
                     String journeyCode = rs.getString("journey_code");
                     String route_id = rs.getString("route_id");
 
-                    routeExistsMap.put(route, true); // mark as live if a match is found
+                    // add live status and journey code to map
+                    List<Pair<Boolean, String>> liveInfoList = routeExistsMap.get(route_id);
+                    if (liveInfoList != null) {
+                        liveInfoList.add(new Pair<>(true, journeyCode));
+                    }
                 }
             } catch (SQLException e) {
                 e.printStackTrace();
+            }
+        }
+        // mark routes that do not have live journeys with a false status
+        for (Map.Entry<String, List<Pair<Boolean, String>>> entry : routeExistsMap.entrySet()) {
+            if (entry.getValue().isEmpty()) {
+                entry.getValue().add(new Pair<>(false, null));
             }
         }
 

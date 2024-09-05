@@ -16,7 +16,8 @@ import javafx.scene.layout.VBox;
 import javafx.util.Duration;
 import javafx.scene.layout.*;
 import java.io.IOException;
-        import java.util.List;
+import java.time.LocalDateTime;
+import java.util.List;
 
         import static com.project.busfinder.util.readLiveLocation.fetchAndProcessResponse;
 import static com.project.busfinder.util.readLiveLocation.processXmlResponse;
@@ -58,6 +59,7 @@ public class MainController {
 
     @FXML
     public void initialize() throws IOException, InterruptedException {
+        //loadSidePanel("/com/project/busfinder/GUI/routeDetailsPanel.fxml");
         // initialise the route service
         routeService = new RouteService();
 
@@ -76,6 +78,7 @@ public class MainController {
         anchorPane.getChildren().add(progressIndicator);
 
         setupPanels();
+        //loadAndInitializeStopsPanel();
         // add a listener to execute code once the map view is fully initialised
         mapView.initializedProperty().addListener((observable, oldValue, newValue) -> {
             if (newValue) {
@@ -86,7 +89,8 @@ public class MainController {
                 busIconController.initializeMap();
                 if (trackBusPanelController != null) {
                     busIconController.setTrackBusPanelController(trackBusPanelController);
-                    stopsPanelController.setUseLiveRoutes(trackBusPanelController.getUseLiveRoutes());
+                    //stopsPanelController.setUseLiveRoutes(trackBusPanelController.getUseLiveRoutes());
+
                 }
                 // map active buses after the map is ready
                 try {
@@ -96,7 +100,8 @@ public class MainController {
                         List<LiveRouteInfo> liveRouteInfoList = processXmlResponse(xmlResponse);
 
                         // call method with the updated list
-                        busIconController.startBusMovementUpdate(null, liveRouteInfoList,true);
+                        busIconController.startBusMovementUpdate(null, liveRouteInfoList,true,null);
+                        //busIconController.mapActiveBuses("Wednesday", LocalDateTime.parse("2024-08-1409:26:00"),5,"12C","VJ_1");
                     } else {
                         System.out.println("Failed to fetch live route data.");
                     }
@@ -106,6 +111,20 @@ public class MainController {
             }
         });
 
+    }
+    public void loadAndInitializeStopsPanel() {
+        if (stopsPanelController == null) {
+            System.out.println("Loading StopsPanelController...");
+            loadSidePanel("/com/project/busfinder/GUI/routeDetailsPanel.fxml");
+            stopsPanelController = getStopsPanelController();
+            if (stopsPanelController == null) {
+                System.err.println("Failed to initialize StopsPanelController.");
+            } else {
+                System.out.println("StopsPanelController successfully initialized.");
+            }
+        } else {
+            System.out.println("StopsPanelController already initialized.");
+        }
     }
 
 
@@ -134,7 +153,7 @@ public class MainController {
         try {
             FXMLLoader loader = new FXMLLoader(getClass().getResource(fxmlFile));
             VBox newSidePanel = loader.load();
-
+            VBox.setVgrow(newSidePanel, Priority.ALWAYS);
             // set the main controller for the loaded side panel based on the FXML file
             if ("/com/project/busfinder/GUI/startingSidePanel.fxml".equals(fxmlFile)) {
                 SidePanelController sidePanelController = loader.getController();
@@ -163,7 +182,7 @@ public class MainController {
     private void toggleSidePanel(ActionEvent event) {
         final double gap = 10;  // defines the gap between the side panel and the button panel
         double endX = gap;  // target position when the panel is opened
-        double startX = -200;  // initial off-screen position when the panel is closed
+        double startX = -220;  // initial off-screen position when the panel is closed
 
         // create transitions for both the side panel and the button panel
         TranslateTransition transition = new TranslateTransition(Duration.seconds(0.3), sidePanel);
@@ -199,6 +218,7 @@ public class MainController {
         loadSidePanel("/com/project/busfinder/GUI/trackBusPanel.fxml");
     }
     public stopsPanelController getStopsPanelController() {
+        loadAndInitializeStopsPanel();
         return stopsPanelController;
     }
 }

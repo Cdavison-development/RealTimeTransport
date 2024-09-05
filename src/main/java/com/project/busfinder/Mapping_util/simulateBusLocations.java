@@ -46,6 +46,17 @@ public class simulateBusLocations {
         }
     }
 
+    /**
+     * queries the journeycode table, which can be used as it stores both public and foreign keys for each bus journey in the database.
+     * gets vehicle journey code value for a given route_ID and journey code
+     *
+     *
+     *
+     * @param route
+     * @param pattern
+     * @return VJCAndDay object that stores the VJC and day.
+     * @throws SQLException
+     */
     public static vjcAndDay getVehicleJourneyCode(String route, String pattern) throws SQLException {
         initializeDatabaseConnection();
         // SQL query to fetch the Vehicle_journey_code from the journeyCode table
@@ -69,6 +80,21 @@ public class simulateBusLocations {
         return null; // return null if no Vehicle_journey_code is found
     }
 
+    /**
+     *
+     * gets journey legs for a specific route and vehicle journey on a given day
+     *
+     * queries the database to find the departure times, stops and coords for each leg of the journey.
+     * The results are returned as a list of journeyleg objects which include the departure time, date, from and to stops and coords
+     *
+     *
+     *
+     * @param routeId the Id of the route we are retrieving the journey legs for
+     * @param vehicleJourneyCode code identifying the specific vehicle journey
+     * @param day day of the week for which to retrieve the data
+     * @return a list of journey leg objects representing each leg of the journey
+     * @throws SQLException
+     */
     public static List<JourneyLeg> getJourneyLegs(String routeId, String vehicleJourneyCode, String day) throws SQLException {
         List<JourneyLeg> journeyLegs = new ArrayList<>();
         String tableName = switch (day) {
@@ -124,7 +150,18 @@ public class simulateBusLocations {
         return journeyLegs;
     }
 
-    //unsure how it will handle two routes at the same time, example route: 10,Vehicle Journey Code: VJ_62, Departure Time: 08:00, From Stop: 2800S14018B, To Stop: 2800S14019A, Longitude: -2.776328, Latitude: 53.437650, route: 10,Vehicle Journey Code: VJ_63, Departure Time: 08:00, From Stop: 2800S44020B, To Stop: 2800S51011B, Longitude: -2.834953, Latitude: 53.423403,
+    /**
+     *
+     * returns a list of active buses within the specified time on the specified day.
+     *
+     * queries database to identify buses operating within the time window centered around the target time.
+     *
+     * @param targetTime the time within to time frame from which we find active buses
+     * @param timeWindowMinutes the time window to consider active buses
+     * @param day day of the week to search bus journeys for.
+     * @return a list of journey infor objects representing active buses within the given time frame
+     * @throws SQLException
+     */
     public static List<JourneyInfo> findActiveBusesInTimeFrame(LocalTime targetTime, int timeWindowMinutes, String day) throws SQLException {
         initializeDatabaseConnection();
 
