@@ -1,5 +1,8 @@
 please unzip data.zip into the data file 
 
+if data is already there, delete it and unzip 
+
+
 Run using java 17
 
 to test the java code with new python data, replace currently existing files in the data folder
