@@ -1,3 +1,5 @@
+create a file named "data" in the root directory 
+
 please unzip data.zip into the data file 
 
 if data is already there, delete it and unzip 
