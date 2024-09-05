@@ -1,12 +1,15 @@
 package com.project.busfinder.util;
 
 import java.net.URI;
+
 import java.net.URLEncoder;
+
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.io.IOException;
 import java.io.StringReader;
+
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
@@ -16,6 +19,7 @@ import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 
 import com.project.busfinder.Mapping_util.LiveRouteInfo;
+
 import com.project.busfinder.helperFunctions.ReadFromDatabase;
 import com.project.busfinder.helperFunctions.SiriNamespaceContext;
 import org.w3c.dom.Document;
@@ -27,7 +31,9 @@ import javax.xml.xpath.XPathConstants;
 import org.xml.sax.InputSource;
 
 public class readLiveLocation {
+
     // my api key for OpenBusData
+
     static String API_KEY = "19f45ab4075ee6ba01144659bd9c987468a00212";
     private static final String Posts_API_URL = "https://data.bus-data.dft.gov.uk/api/v1/datafeed/";
 
@@ -35,14 +41,17 @@ public class readLiveLocation {
     public static void main(String[] args) {
         try {
 
+
             List<LiveRouteInfo> lineAndJourneyRefs = processXmlResponse(fetchAndProcessResponse());
             System.out.println(lineAndJourneyRefs);
 
 
         } catch (IOException | InterruptedException e) {
+
             e.printStackTrace();
         }
     }
+
 
     /**
      *
@@ -111,6 +120,7 @@ public class readLiveLocation {
         ArrayList<AbstractMap.SimpleEntry<String, String>> liveRoutes = new ArrayList<>();
         ArrayList<String> dbRoutes = ReadFromDatabase.readRoutes();
         List<LiveRouteInfo> routeInfoList = new ArrayList<>();
+
         try {
             DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
             dbFactory.setNamespaceAware(true);
@@ -122,6 +132,7 @@ public class readLiveLocation {
             xpath.setNamespaceContext(new SiriNamespaceContext());
 
             NodeList vehicleActivities = (NodeList) xpath.evaluate("//siri:VehicleActivity", doc, XPathConstants.NODESET);
+
             int count = 0;
 
             LocalDateTime now = LocalDateTime.now();
@@ -161,9 +172,11 @@ public class readLiveLocation {
                     System.out.println("Error parsing date-time fields: " + e.getMessage());
                 }
             }
+
         } catch (Exception e) {
             System.out.println("Error parsing XML: " + e.getMessage());
         }
+
 
         System.out.println("Filtered live routes: " + liveRoutes);
         return routeInfoList;

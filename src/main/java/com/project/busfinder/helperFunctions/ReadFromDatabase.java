@@ -9,17 +9,21 @@ public class ReadFromDatabase {
         readRoutes();
     }
 
+
     public static ArrayList<String> readRoutes() {
+
         Connection con = null;
         PreparedStatement p = null;
         ResultSet rs = null;
         ArrayList<String> routes = null;
+
 
         // establish a connection to the database using the connect method
         con = makeConnection.connect();
 
         try {
             // SQL query to select route IDs from the routes table
+
             String sql = "select route_id from routes";
             p = con.prepareStatement(sql);
             rs = p.executeQuery();
@@ -37,6 +41,8 @@ public class ReadFromDatabase {
         }
 
         // return the list of route IDs
+
+
         return routes;
     }
 }
